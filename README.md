@@ -31,7 +31,7 @@ Editing these strings manually in text inputs is tedious, prone to typing errors
 
 1. Open **HACS** in your Home Assistant.
 2. Click on the 3 dots in the top right corner and choose **Custom repositories**.
-3. Enter your repository URL: `https://github.com/your-username/sonoff-trv-schedule-card`
+3. Enter your repository URL: `https://github.com/petronovak/sonoff-trv-schedule-card`
 4. Select category: **Dashboard** (or **Lovelace**).
 5. Click **Add**, find **Sonoff TRVZB Weekly Schedule Card** in the list, and click **Download**.
 6. Refresh your browser (or reload Lovelace resources).
