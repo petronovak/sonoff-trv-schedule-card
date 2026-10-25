@@ -1,0 +1,6 @@
+{
+  "name": "Sonoff TRVZB Weekly Schedule Card",
+  "description": "Custom Lovelace schedule card & visual editor for Sonoff TRVZB heating schedules in Home Assistant.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

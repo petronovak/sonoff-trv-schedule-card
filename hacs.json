@@ -1,0 +1,6 @@
+{
+  "name": "Sonoff TRVZB Weekly Schedule Card",
+  "content_in_root": true,
+  "filename": "sonoff-trv-schedule-card.js",
+  "render_readme": true
+}
