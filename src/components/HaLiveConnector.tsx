@@ -130,11 +130,12 @@ export const HaLiveConnector: React.FC<HaLiveConnectorProps> = ({
             <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
               {t.quickRoomSelect}
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               {[
-                { id: 'vitalnia', name: lang === 'en' ? 'Living Room (Screenshot)' : 'Вітальня (як на скріншоті)', prefix: 'text.trv_vitalnia' },
-                { id: 'spalnya', name: lang === 'en' ? 'Bedroom (Eco Nights)' : 'Спальня (економні ночі)', prefix: 'text.trv_spalnya' },
-                { id: 'dytiacha', name: lang === 'en' ? 'Nursery (Stable 21-22°)' : 'Дитяча (стабільні 21-22°)', prefix: 'text.trv_dytiacha' },
+                { id: 'vitalnia', name: lang === 'en' ? 'Living Room' : 'Вітальня', prefix: 'text.trv_vitalnia' },
+                { id: 'kabinet', name: lang === 'en' ? 'Office / Kabinet' : 'Кабінет', prefix: 'text.trv_kabinet' },
+                { id: 'spalnya', name: lang === 'en' ? 'Bedroom' : 'Спальня', prefix: 'text.trv_spalnya' },
+                { id: 'dytiacha', name: lang === 'en' ? 'Nursery' : 'Дитяча', prefix: 'text.trv_dytiacha' },
               ].map(room => (
                 <button
                   key={room.id}

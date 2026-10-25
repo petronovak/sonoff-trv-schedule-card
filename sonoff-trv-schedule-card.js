@@ -206,10 +206,11 @@
 
     setConfig(config) {
       if (!config) throw new Error('Invalid configuration');
+      const climate = config.climate_entity || config.entity || '';
       this._config = {
         title: config.title || '',
         entity_prefix: config.entity_prefix || '',
-        climate_entity: config.climate_entity || '',
+        climate_entity: climate,
         entities: config.entities || {},
         language: config.language || '',
         ...config,
@@ -245,7 +246,27 @@
 
     _resolveEntityMap() {
       const lang = this._getLangStrings();
-      const prefix = (this._config.entity_prefix || '').trim();
+      let prefix = (this._config.entity_prefix || '').trim();
+
+      // Auto-derive schedule prefix from climate entity or generic entity
+      if (!prefix) {
+        const candidate = (this._config.climate_entity || this._config.entity || '').trim();
+        if (candidate) {
+          if (candidate.startsWith('climate.')) {
+            prefix = candidate.replace(/^climate\./, 'text.');
+          } else if (candidate.startsWith('text.')) {
+            prefix = candidate;
+          } else {
+            prefix = `text.${candidate}`;
+          }
+        }
+      }
+
+      // If prefix has _weekly_schedule_ suffix attached, strip it to get base prefix
+      if (prefix) {
+        prefix = prefix.replace(/_weekly_schedule_.*$/, '');
+      }
+
       const map = {};
       for (const d of lang.days) {
         if (this._config.entities && this._config.entities[d.key]) {
@@ -740,7 +761,10 @@
               <div class="icon-trv">♨</div>
               <div>
                 <h2 class="title">${title}</h2>
-                <p class="entity-sub">${dayData.entityId}</p>
+                <p class="entity-sub">
+                  ${dayData.entityId}
+                  ${this._hass && !dayData.stateObj ? `<span style="color: #f87171; font-weight: bold; margin-left: 4px;">(${lang.days[0].short === 'Пн' ? 'не знайдено в HA' : 'not found in HA'})</span>` : ''}
+                </p>
               </div>
             </div>
             ${climateInfo}
@@ -947,7 +971,7 @@
       name: 'Sonoff TRVZB Schedule Card',
       description: 'Graphical 24-hour weekly heating schedule card for Sonoff TRVZB (Zigbee2MQTT)',
       preview: true,
-      documentationURL: 'https://github.com/petro-novak/sonoff-trv-schedule-card',
+      documentationURL: 'https://github.com/petronovak/sonoff-trv-schedule-card',
     });
   }
 })();

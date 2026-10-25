@@ -54,20 +54,27 @@ Editing these strings manually in text inputs is tedious, prone to typing errors
 | Option | Type | Required | Default | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `type` | string | **Yes** | `custom:sonoff-trv-schedule-card` | Card type identifier |
+| `entity` / `climate_entity` | string | Recommended | `''` | Linked climate entity (e.g. `climate.trv_kabinet`). **The card automatically derives the prefix** `text.trv_kabinet` for all 7 days! |
 | `title` | string | No | `'Sonoff TRVZB Heating Schedule'` | Card header title |
-| `entity_prefix` | string | Recommended | `''` | Common prefix for the 7 text entities (e.g. `text.trv_vitalnia`). The card appends `_weekly_schedule_monday` ... `sunday`. |
-| `climate_entity` | string | No | `''` | Optional linked climate entity (e.g. `climate.trv_vitalnia`) to display current temperature, target, and battery. |
+| `entity_prefix` | string | No | Auto from climate | Common prefix for the 7 text entities (e.g. `text.trv_kabinet`). Overrides auto-derivation. |
 | `language` | string | No | `'auto'` | Force language: `'en'` or `'uk'`. If omitted, detects automatically from Home Assistant. |
-| `entities` | map | No | `{}` | Explicit mapping of custom entity IDs for each day (`monday` to `sunday`) if not using prefix. |
+| `entities` | map | No | `{}` | Explicit mapping of custom entity IDs for each day (`monday` to `sunday`) if needed. |
 
-#### Example YAML Configuration:
+#### Minimal Example (Auto-derived from Climate Entity):
 
 ```yaml
 type: custom:sonoff-trv-schedule-card
-title: "Living Room Heating Schedule"
-entity_prefix: text.trv_livingroom
-climate_entity: climate.trv_livingroom
-language: en
+entity: climate.trv_kabinet
+# Automatically binds to: text.trv_kabinet_weekly_schedule_monday ... sunday
+```
+
+#### Full Example:
+
+```yaml
+type: custom:sonoff-trv-schedule-card
+title: "Кабінет (Опалення)"
+entity: climate.trv_kabinet
+language: uk
 ```
 
 #### Example with Manual Entity Mapping:

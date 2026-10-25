@@ -75,6 +75,25 @@ export const ROOM_PRESETS: TrvRoomPreset[] = [
       sunday: '00:00/21 08:00/22 13:00/21.5 18:00/22 21:00/20.5',
     },
   },
+  {
+    id: 'kabinet',
+    name: 'Кабінет (TRV Кабінет)',
+    prefix: 'text.trv_kabinet',
+    climateEntity: 'climate.trv_kabinet',
+    currentTemp: 22.1,
+    targetTemp: 22.5,
+    battery: 98,
+    hvacAction: 'heating',
+    schedules: {
+      monday: '00:00/19 08:00/22.5 18:30/20',
+      tuesday: '00:00/19 08:00/22.5 18:30/20',
+      wednesday: '00:00/19 08:00/22.5 18:30/20',
+      thursday: '00:00/19 08:00/22.5 18:30/20',
+      friday: '00:00/19 08:00/22.5 17:00/19.5',
+      saturday: '00:00/19 10:00/21.5 19:00/19',
+      sunday: '00:00/19 10:00/21.5 19:00/19',
+    },
+  },
 ];
 
 export function buildDaySchedules(
