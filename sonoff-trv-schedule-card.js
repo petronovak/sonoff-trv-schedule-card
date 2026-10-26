@@ -26,7 +26,7 @@
       edit: '✎ Редагувати розклад',
       save: '✓ Зберегти зміни в HA',
       cancel: '✕ Скасувати',
-      add: '+ Додати',
+      add: '+ Додати період',
       newTransition: '+ Новий перехід:',
       weekdays: 'Будні (Пн-Пт)',
       weekend: 'Вихідні (Сб-Нд)',
@@ -37,6 +37,12 @@
       errorPrefix: 'Помилка збереження:',
       rawStringLabel: 'Zigbee2MQTT рядок:',
       today: 'Сьогодні',
+      viewDay: 'День',
+      viewWeek: 'Тиждень',
+      activeNow: 'Зараз активно:',
+      clickToEdit: 'Натисніть на будь-який день для перегляду та редагування:',
+      dayStartLocked: 'початок доби 00:00',
+      notFoundInHa: 'не знайдено в HA',
       tempLabels: {
         eco: 'Еко',
         night: 'Ніч',
@@ -63,7 +69,7 @@
       edit: '✎ Edit schedule',
       save: '✓ Save changes to HA',
       cancel: '✕ Cancel',
-      add: '+ Add',
+      add: '+ Add period',
       newTransition: '+ New transition:',
       weekdays: 'Weekdays (Mon-Fri)',
       weekend: 'Weekend (Sat-Sun)',
@@ -74,6 +80,12 @@
       errorPrefix: 'Save error:',
       rawStringLabel: 'Zigbee2MQTT string:',
       today: 'Today',
+      viewDay: 'Day',
+      viewWeek: 'Week',
+      activeNow: 'Active now:',
+      clickToEdit: 'Click any day to view and edit schedule:',
+      dayStartLocked: 'day start 00:00',
+      notFoundInHa: 'not found in HA',
       tempLabels: {
         eco: 'Eco',
         night: 'Night',
@@ -83,6 +95,8 @@
       },
     },
   };
+
+  const PRESETS = [17, 19, 21.5, 23];
 
   function timeToMin(timeStr) {
     if (!timeStr) return 0;
@@ -185,6 +199,7 @@
       this._config = {};
       this._hass = null;
       this._selectedDayIndex = this._getTodayIndex();
+      this._viewMode = 'tabs'; // 'tabs' or 'list'
       this._editing = false;
       this._editingTransitions = [];
       this._statusMsg = '';
@@ -213,8 +228,12 @@
         climate_entity: climate,
         entities: config.entities || {},
         language: config.language || '',
+        default_view: config.default_view || 'tabs',
         ...config,
       };
+      if (config.default_view) {
+        this._viewMode = config.default_view;
+      }
       this._render();
     }
 
@@ -350,7 +369,24 @@
       const defaultTitle = this._config.language === 'en' ? 'Sonoff TRVZB Heating Schedule' : 'Розклад термоголовки Sonoff TRVZB';
       const title = this._config.title || defaultTitle;
 
-      // Climate info if available
+      // Current active interval
+      const now = new Date();
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const isSelectedToday = this._selectedDayIndex === this._getTodayIndex();
+      let activeInterval = null;
+      if (isSelectedToday) {
+        for (const iv of intervals) {
+          if (nowMinutes >= iv.startMin && nowMinutes < iv.endMin) {
+            activeInterval = iv;
+            break;
+          }
+        }
+        if (!activeInterval && intervals.length > 0) {
+          activeInterval = intervals[intervals.length - 1];
+        }
+      }
+
+      // Climate badge in header
       let climateInfo = '';
       if (this._config.climate_entity && this._hass) {
         const clState = this._hass.states[this._config.climate_entity];
@@ -370,7 +406,7 @@
         }
       }
 
-      // 24h timeline segments
+      // 24h timeline segments for Day view
       const timelineSegments = intervals.map(iv => {
         const pct = (iv.duration / 1440) * 100;
         const color = getTempColor(iv.temperature, lang);
@@ -381,36 +417,103 @@
         `;
       }).join('');
 
-      // Intervals list
-      const intervalCards = intervals.map((iv, idx) => {
-        const color = getTempColor(iv.temperature, lang);
-        return `
-          <div class="period-row ${this._editing ? 'period-row-editing' : ''}">
-            <div class="period-time">
-              <span class="time-clock">${iv.startTime}</span>
-              <span class="time-arrow">→</span>
-              <span class="time-clock text-muted">${iv.endTime}</span>
-              <span class="period-duration">(${Math.round(iv.duration / 60 * 10) / 10} ${lang.hoursUnit})</span>
+      // Periods markup (View mode vs Edit mode)
+      let periodsContent = '';
+      if (!this._editing) {
+        periodsContent = intervals.map((iv, idx) => {
+          const color = getTempColor(iv.temperature, lang);
+          const isNowActive = isSelectedToday && activeInterval?.index === idx;
+          return `
+            <div class="period-row ${isNowActive ? 'period-row-active' : ''}">
+              <div class="period-time">
+                <span class="time-index">${idx + 1}</span>
+                <span class="time-clock">${iv.startTime}</span>
+                <span class="time-arrow">→</span>
+                <span class="time-clock text-muted">${iv.endTime}</span>
+                <span class="period-duration">(${Math.round(iv.duration / 60 * 10) / 10} ${lang.hoursUnit})</span>
+              </div>
+              <div class="period-temp-block">
+                <span class="temp-badge" style="background-color: ${color.bg}25; color: ${color.text}; border: 1px solid ${color.bg}50;">
+                  ${formatTemp(iv.temperature)}°C
+                </span>
+                <span class="temp-label">${color.label}</span>
+              </div>
             </div>
-            
-            <div class="period-temp-block">
-              <span class="temp-badge" style="background-color: ${color.bg}25; color: ${color.text}; border: 1px solid ${color.bg}50;">
-                ${formatTemp(iv.temperature)}°C
-              </span>
-              <span class="temp-label">${color.label}</span>
-            </div>
+          `;
+        }).join('');
+      } else {
+        // Detailed Interactive Editor for each transition point
+        periodsContent = activeTransitions.map((t, idx) => {
+          const color = getTempColor(t.temperature, lang);
+          const isFirst = idx === 0;
+          return `
+            <div class="period-edit-card">
+              <div class="edit-card-top">
+                <div class="time-input-group">
+                  <span class="time-index">${idx + 1}</span>
+                  ${isFirst ? `
+                    <div class="time-locked-badge">
+                      <span>00:00</span>
+                      <span class="locked-note">(${lang.dayStartLocked})</span>
+                    </div>
+                  ` : `
+                    <div class="time-field-wrapper">
+                      <span class="time-icon">🕒</span>
+                      <input type="time" class="time-input" data-index="${idx}" value="${t.time}" />
+                    </div>
+                  `}
+                </div>
 
-            ${this._editing ? `
-              <div class="period-actions">
-                <button class="btn-icon" data-action="temp-sub" data-index="${idx}" title="-0.5°C">−</button>
-                <button class="btn-icon" data-action="temp-add" data-index="${idx}" title="+0.5°C">+</button>
-                ${idx > 0 ? `
-                  <button class="btn-icon btn-del" data-action="del-period" data-index="${idx}" title="Delete">✕</button>
+                <div class="temp-stepper">
+                  <button class="btn-step" data-action="temp-sub" data-index="${idx}" title="-0.5°C">−</button>
+                  <span class="temp-value" style="color: ${color.text};">${formatTemp(t.temperature)}°C</span>
+                  <button class="btn-step" data-action="temp-add" data-index="${idx}" title="+0.5°C">+</button>
+                </div>
+
+                ${!isFirst ? `
+                  <button class="btn-del" data-action="del-period" data-index="${idx}" title="Delete">✕</button>
                 ` : `
-                  <span class="badge-lock" title="Fixed day start">🔒 00:00</span>
+                  <div style="width: 32px;"></div>
                 `}
               </div>
-            ` : ''}
+
+              <!-- Quick Presets -->
+              <div class="presets-row">
+                <span class="presets-label">Пресети:</span>
+                ${PRESETS.map(p => `
+                  <button type="button" class="btn-preset ${t.temperature === p ? 'active' : ''}" data-index="${idx}" data-preset="${p}">
+                    ${p}°
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // Week view content (All 7 days miniature list)
+      const weekListContent = lang.days.map((d, i) => {
+        const dData = this._getDayData(d.key);
+        const dIntervals = getIntervals(dData.transitions);
+        const isToday = i === this._getTodayIndex();
+        const dSegs = dIntervals.map(iv => {
+          const pct = (iv.duration / 1440) * 100;
+          const col = getTempColor(iv.temperature, lang);
+          return `<div class="tl-segment" style="width: ${pct}%; background-color: ${col.bg};"></div>`;
+        }).join('');
+
+        return `
+          <div class="week-day-row ${isToday ? 'week-day-today' : ''}" data-select-day="${i}">
+            <div class="week-day-info">
+              <div class="week-day-name">
+                <span>${d.name}</span>
+                ${isToday ? `<span class="badge-today">${lang.today}</span>` : ''}
+              </div>
+              <span class="week-day-points">${dData.transitions.length} / 6 ${lang.periods}</span>
+            </div>
+            <div class="timeline-bar timeline-bar-mini">
+              ${dSegs}
+            </div>
           </div>
         `;
       }).join('');
@@ -447,15 +550,15 @@
             gap: 10px;
           }
           .icon-trv {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
             background: rgba(245, 158, 11, 0.15);
             color: #f59e0b;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 16px;
+            font-size: 18px;
           }
           .title {
             font-size: 16px;
@@ -490,19 +593,28 @@
             text-transform: capitalize;
             color: #10b981;
           }
+
+          /* Navigation and View Switcher */
+          .nav-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 14px;
+          }
           .days-nav {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
             gap: 4px;
-            background: rgba(0, 0, 0, 0.2);
+            background: rgba(0, 0, 0, 0.25);
             padding: 4px;
             border-radius: 10px;
-            margin-bottom: 16px;
+            flex: 1;
           }
           .day-tab {
             background: transparent;
             border: none;
-            padding: 6px 2px;
+            padding: 7px 2px;
             border-radius: 6px;
             color: var(--secondary-text-color, #94a3b8);
             cursor: pointer;
@@ -536,6 +648,34 @@
             opacity: 1;
             box-shadow: 0 0 6px #f59e0b;
           }
+          .view-toggle {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            background: rgba(0, 0, 0, 0.25);
+            padding: 4px;
+            border-radius: 10px;
+            shrink: 0;
+          }
+          .view-btn {
+            background: transparent;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 6px;
+            color: var(--secondary-text-color, #94a3b8);
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+          }
+          .view-btn.active {
+            background: rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+          }
+
+          /* 24-Hour Timeline Bar */
           .timeline-wrapper {
             margin-bottom: 14px;
           }
@@ -548,12 +688,16 @@
             margin-bottom: 6px;
           }
           .timeline-bar {
-            height: 24px;
+            height: 26px;
             border-radius: 8px;
             overflow: hidden;
             display: flex;
             background: #0f172a;
             border: 1px solid rgba(255, 255, 255, 0.1);
+          }
+          .timeline-bar-mini {
+            height: 14px;
+            border-radius: 6px;
           }
           .tl-segment {
             height: 100%;
@@ -579,6 +723,45 @@
             color: var(--secondary-text-color, #64748b);
             font-family: monospace;
           }
+
+          /* Active Interval Box */
+          .active-box {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-size: 12px;
+          }
+          .active-left {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #94a3b8;
+          }
+          .dot-pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 8px #10b981;
+          }
+          .active-right {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+          .active-temp {
+            font-size: 14px;
+            font-weight: 700;
+            color: #34d399;
+            font-family: monospace;
+          }
+
+          /* Periods list (View Mode) */
           .periods-list {
             display: flex;
             flex-direction: column;
@@ -595,9 +778,9 @@
             border-radius: 8px;
             font-size: 13px;
           }
-          .period-row-editing {
-            background: rgba(255, 255, 255, 0.06);
-            border-color: rgba(255, 255, 255, 0.12);
+          .period-row-active {
+            border-color: rgba(2, 132, 199, 0.5);
+            background: rgba(2, 132, 199, 0.08);
           }
           .period-time {
             display: flex;
@@ -605,6 +788,17 @@
             gap: 6px;
             font-family: monospace;
             font-variant-numeric: tabular-nums;
+          }
+          .time-index {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: #94a3b8;
           }
           .time-clock {
             font-weight: 600;
@@ -636,50 +830,220 @@
             font-size: 11px;
             color: var(--secondary-text-color, #94a3b8);
           }
-          .period-actions {
+
+          /* Detailed Period Edit Card (Edit Mode) */
+          .period-edit-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+          }
+          .edit-card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+          }
+          .time-input-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+          .time-locked-badge {
+            font-family: monospace;
+            font-weight: 600;
+            font-size: 13px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+          .locked-note {
+            font-size: 10px;
+            color: #94a3b8;
+            font-family: sans-serif;
+          }
+          .time-field-wrapper {
             display: flex;
             align-items: center;
             gap: 4px;
-          }
-          .btn-icon {
-            width: 28px;
-            height: 28px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 2px 6px;
             border-radius: 6px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            background: rgba(255, 255, 255, 0.06);
-            color: var(--primary-text-color, #fff);
+          }
+          .time-icon {
+            font-size: 12px;
+            opacity: 0.6;
+          }
+          .time-input {
+            background: transparent;
+            border: none;
+            color: #ffffff;
+            font-family: monospace;
+            font-size: 13px;
+            font-weight: 600;
+            outline: none;
             cursor: pointer;
+          }
+          .temp-stepper {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+          }
+          .btn-step {
+            width: 30px;
+            height: 30px;
+            border-radius: 6px;
+            border: none;
+            background: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
             font-weight: bold;
+            font-size: 15px;
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
           }
-          .btn-icon:hover {
-            background: rgba(255, 255, 255, 0.15);
+          .btn-step:hover {
+            background: rgba(255, 255, 255, 0.18);
+          }
+          .temp-value {
+            font-family: monospace;
+            font-weight: 700;
+            font-size: 13px;
+            min-width: 54px;
+            text-align: center;
           }
           .btn-del {
+            width: 30px;
+            height: 30px;
+            border-radius: 6px;
+            border: 1px solid rgba(248, 113, 113, 0.3);
+            background: rgba(248, 113, 113, 0.1);
             color: #f87171;
-            border-color: rgba(248, 113, 113, 0.3);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
           }
-          .badge-lock {
+          .btn-del:hover {
+            background: rgba(248, 113, 113, 0.25);
+          }
+          .presets-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding-top: 4px;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            flex-wrap: wrap;
+          }
+          .presets-label {
+            font-size: 11px;
+            color: #94a3b8;
+          }
+          .btn-preset {
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+            color: #cbd5e1;
+            font-size: 11px;
+            font-family: monospace;
+            cursor: pointer;
+            transition: all 0.15s ease;
+          }
+          .btn-preset:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+          }
+          .btn-preset.active {
+            background: #f59e0b;
+            color: #0f172a;
+            font-weight: bold;
+            border-color: #f59e0b;
+          }
+
+          /* Week Mode Rows */
+          .week-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 14px;
+          }
+          .week-day-row {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+          }
+          .week-day-row:hover {
+            background: rgba(255, 255, 255, 0.07);
+            border-color: rgba(255, 255, 255, 0.12);
+          }
+          .week-day-today {
+            border-color: rgba(2, 132, 199, 0.4);
+            background: rgba(2, 132, 199, 0.05);
+          }
+          .week-day-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+          }
+          .week-day-name {
+            font-weight: 600;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+          .badge-today {
             font-size: 10px;
-            opacity: 0.5;
-            padding: 2px 6px;
+            padding: 1px 6px;
+            border-radius: 4px;
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+            font-weight: 600;
           }
+          .week-day-points {
+            font-size: 11px;
+            color: #94a3b8;
+            font-family: monospace;
+          }
+
+          /* Toolbar */
           .toolbar {
             display: flex;
             align-items: center;
             justify-content: space-between;
             flex-wrap: wrap;
             gap: 8px;
-            padding-top: 6px;
+            padding-top: 8px;
             border-top: 1px solid rgba(255, 255, 255, 0.06);
           }
           .btn-primary {
             background: var(--primary-color, #0284c7);
             color: #ffffff;
             border: none;
-            padding: 6px 14px;
+            padding: 7px 16px;
             border-radius: 8px;
             font-size: 13px;
             font-weight: 600;
@@ -707,33 +1071,6 @@
           .btn-secondary:hover {
             background: rgba(255, 255, 255, 0.14);
           }
-          .add-row-block {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.25);
-            border-radius: 8px;
-            margin-bottom: 12px;
-            flex-wrap: wrap;
-          }
-          .add-row-block input[type="time"] {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: #fff;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-family: monospace;
-          }
-          .add-row-block input[type="number"] {
-            width: 70px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: #fff;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-family: monospace;
-          }
           .status-banner {
             margin-top: 10px;
             font-size: 12px;
@@ -756,6 +1093,7 @@
         </style>
 
         <div class="card-container">
+          <!-- Card Header -->
           <div class="header">
             <div class="title-group">
               <div class="icon-trv">♨</div>
@@ -763,82 +1101,119 @@
                 <h2 class="title">${title}</h2>
                 <p class="entity-sub">
                   ${dayData.entityId}
-                  ${this._hass && !dayData.stateObj ? `<span style="color: #f87171; font-weight: bold; margin-left: 4px;">(${lang.days[0].short === 'Пн' ? 'не знайдено в HA' : 'not found in HA'})</span>` : ''}
+                  ${this._hass && !dayData.stateObj ? `<span style="color: #f87171; font-weight: bold; margin-left: 4px;">(${lang.notFoundInHa})</span>` : ''}
                 </p>
               </div>
             </div>
             ${climateInfo}
           </div>
 
-          <div class="days-nav">
-            ${lang.days.map((d, i) => {
-              const isToday = i === this._getTodayIndex();
-              const isActive = i === this._selectedDayIndex;
-              return `
-                <button class="day-tab ${isActive ? 'active' : ''}" data-day-index="${i}">
-                  <span>${d.short}</span>
-                  <span class="day-dot ${isToday ? 'today' : ''}"></span>
-                </button>
-              `;
-            }).join('')}
-          </div>
-
-          <div class="timeline-wrapper">
-            <div class="timeline-header">
-              <span>${lang.scale24h} <strong>${selectedDay.name}</strong></span>
-              <span>${intervals.length} / 6 ${lang.periods}</span>
+          <!-- Navigation: Day Tabs & View Mode Switcher -->
+          <div class="nav-row">
+            <div class="days-nav">
+              ${lang.days.map((d, i) => {
+                const isToday = i === this._getTodayIndex();
+                const isActive = i === this._selectedDayIndex && this._viewMode === 'tabs';
+                return `
+                  <button class="day-tab ${isActive ? 'active' : ''}" data-day-index="${i}">
+                    <span>${d.short}</span>
+                    <span class="day-dot ${isToday ? 'today' : ''}"></span>
+                  </button>
+                `;
+              }).join('')}
             </div>
-            <div class="timeline-bar">
-              ${timelineSegments}
-            </div>
-            <div class="timeline-ticks">
-              <span>00:00</span>
-              <span>06:00</span>
-              <span>12:00</span>
-              <span>18:00</span>
-              <span>24:00</span>
-            </div>
-          </div>
 
-          ${this._editing && activeTransitions.length < 6 ? `
-            <div class="add-row-block">
-              <span style="font-size: 12px; color: #94a3b8;">${lang.newTransition}</span>
-              <input type="time" id="new-time" value="12:00" step="900" />
-              <input type="number" id="new-temp" value="21.0" min="4" max="35" step="0.5" />
-              <button class="btn-secondary" id="btn-add-period">${lang.add}</button>
-            </div>
-          ` : ''}
-
-          <div class="periods-list">
-            ${intervalCards}
-          </div>
-
-          <div class="toolbar">
-            ${!this._editing ? `
-              <button class="btn-primary" id="btn-edit-mode">
-                ${lang.edit}
+            <div class="view-toggle">
+              <button class="view-btn ${this._viewMode === 'tabs' ? 'active' : ''}" data-view="tabs">
+                ${lang.viewDay}
               </button>
-              <div style="display: flex; gap: 6px;">
-                <button class="btn-secondary" id="btn-copy-weekdays" title="${lang.weekdays}">
-                  ${lang.weekdays}
-                </button>
-                <button class="btn-secondary" id="btn-copy-all" title="${lang.allWeek}">
-                  ${lang.allWeek}
-                </button>
+              <button class="view-btn ${this._viewMode === 'list' ? 'active' : ''}" data-view="list">
+                ${lang.viewWeek}
+              </button>
+            </div>
+          </div>
+
+          <!-- MODE 1: DAY VIEW (Tabs) -->
+          ${this._viewMode === 'tabs' ? `
+            <div class="timeline-wrapper">
+              <div class="timeline-header">
+                <span>${lang.scale24h} <strong>${selectedDay.name}</strong></span>
+                <span>${intervals.length} / 6 ${lang.periods}</span>
               </div>
-            ` : `
-              <button class="btn-primary" id="btn-save" style="background: #16a34a;">
-                ${lang.save}
-              </button>
-              <button class="btn-secondary" id="btn-cancel">
-                ${lang.cancel}
-              </button>
-            `}
-          </div>
+              <div class="timeline-bar">
+                ${timelineSegments}
+              </div>
+              <div class="timeline-ticks">
+                <span>00:00</span>
+                <span>06:00</span>
+                <span>12:00</span>
+                <span>18:00</span>
+                <span>24:00</span>
+              </div>
+            </div>
 
-          <div class="raw-preview">
-            ${lang.rawStringLabel} ${serializeSchedule(activeTransitions)}
-          </div>
+            ${isSelectedToday && activeInterval && !this._editing ? `
+              <div class="active-box">
+                <div class="active-left">
+                  <div class="dot-pulse"></div>
+                  <span>${lang.activeNow}</span>
+                  <strong style="color: #fff; font-family: monospace;">${activeInterval.startTime} - ${activeInterval.endTime}</strong>
+                </div>
+                <div class="active-right">
+                  <span>${lang.target}:</span>
+                  <span class="active-temp">${formatTemp(activeInterval.temperature)}°C</span>
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Periods List or Detailed Editor -->
+            <div class="periods-list">
+              ${periodsContent}
+            </div>
+
+            <!-- Bottom Toolbar -->
+            <div class="toolbar">
+              ${!this._editing ? `
+                <button class="btn-primary" id="btn-edit-mode">
+                  ${lang.edit}
+                </button>
+                <div style="display: flex; gap: 6px;">
+                  <button class="btn-secondary" id="btn-copy-weekdays" title="${lang.weekdays}">
+                    ${lang.weekdays}
+                  </button>
+                  <button class="btn-secondary" id="btn-copy-all" title="${lang.allWeek}">
+                    ${lang.allWeek}
+                  </button>
+                </div>
+              ` : `
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <button class="btn-primary" id="btn-save" style="background: #16a34a;">
+                    ${lang.save}
+                  </button>
+                  <button class="btn-secondary" id="btn-cancel">
+                    ${lang.cancel}
+                  </button>
+                </div>
+                ${activeTransitions.length < 6 ? `
+                  <button class="btn-secondary" id="btn-add-period">
+                    ${lang.add}
+                  </button>
+                ` : ''}
+              `}
+            </div>
+
+            <div class="raw-preview">
+              ${lang.rawStringLabel} ${serializeSchedule(activeTransitions)}
+            </div>
+          ` : `
+            <!-- MODE 2: WEEK VIEW (All 7 Days) -->
+            <div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px;">
+              ${lang.clickToEdit}
+            </div>
+            <div class="week-list">
+              ${weekListContent}
+            </div>
+          `}
 
           ${this._statusMsg ? `
             <div class="status-banner">${this._statusMsg}</div>
@@ -854,17 +1229,44 @@
       if (!root) return;
       const lang = this._getLangStrings();
 
+      // Day tabs navigation
       root.querySelectorAll('.day-tab').forEach(tab => {
         tab.addEventListener('click', () => {
           const idx = parseInt(tab.getAttribute('data-day-index'), 10);
           if (!isNaN(idx)) {
             this._selectedDayIndex = idx;
+            this._viewMode = 'tabs';
             this._editing = false;
             this._render();
           }
         });
       });
 
+      // View mode buttons (Day vs Week)
+      root.querySelectorAll('.view-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const view = btn.getAttribute('data-view');
+          if (view === 'tabs' || view === 'list') {
+            this._viewMode = view;
+            this._editing = false;
+            this._render();
+          }
+        });
+      });
+
+      // Week mode row clicks (jump directly into that day's view)
+      root.querySelectorAll('.week-day-row').forEach(row => {
+        row.addEventListener('click', () => {
+          const idx = parseInt(row.getAttribute('data-select-day'), 10);
+          if (!isNaN(idx)) {
+            this._selectedDayIndex = idx;
+            this._viewMode = 'tabs';
+            this._render();
+          }
+        });
+      });
+
+      // Edit Mode Toggle
       const editBtn = root.getElementById('btn-edit-mode');
       if (editBtn) {
         editBtn.addEventListener('click', () => {
@@ -876,6 +1278,7 @@
         });
       }
 
+      // Cancel Edit
       const cancelBtn = root.getElementById('btn-cancel');
       if (cancelBtn) {
         cancelBtn.addEventListener('click', () => {
@@ -884,6 +1287,7 @@
         });
       }
 
+      // Save in HA
       const saveBtn = root.getElementById('btn-save');
       if (saveBtn) {
         saveBtn.addEventListener('click', () => {
@@ -892,28 +1296,33 @@
         });
       }
 
-      const addBtn = root.getElementById('btn-add-period');
-      if (addBtn) {
-        addBtn.addEventListener('click', () => {
-          const timeInput = root.getElementById('new-time');
-          const tempInput = root.getElementById('new-temp');
-          if (!timeInput || !tempInput) return;
-
-          const timeVal = timeInput.value || '12:00';
-          const tempVal = normTemp(tempInput.value);
-
-          const existing = this._editingTransitions.find(t => t.time === timeVal);
-          if (existing) {
-            existing.temperature = tempVal;
-          } else {
-            this._editingTransitions.push({ time: timeVal, temperature: tempVal });
+      // Time Input Change Handler in Edit Mode
+      root.querySelectorAll('.time-input').forEach(input => {
+        input.addEventListener('change', e => {
+          const idx = parseInt(input.getAttribute('data-index'), 10);
+          const newTime = e.target.value;
+          if (idx > 0 && newTime && this._editingTransitions[idx]) {
+            this._editingTransitions[idx].time = newTime;
+            this._editingTransitions.sort((a, b) => timeToMin(a.time) - timeToMin(b.time));
+            this._render();
           }
-          this._editingTransitions.sort((a, b) => timeToMin(a.time) - timeToMin(b.time));
-          this._render();
         });
-      }
+      });
 
-      root.querySelectorAll('.btn-icon').forEach(btn => {
+      // Quick Preset Temperature Buttons in Edit Mode
+      root.querySelectorAll('.btn-preset').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.getAttribute('data-index'), 10);
+          const presetVal = parseFloat(btn.getAttribute('data-preset'));
+          if (!isNaN(idx) && !isNaN(presetVal) && this._editingTransitions[idx]) {
+            this._editingTransitions[idx].temperature = presetVal;
+            this._render();
+          }
+        });
+      });
+
+      // Temperature +/- Buttons and Delete in Edit Mode
+      root.querySelectorAll('.btn-step, .btn-del').forEach(btn => {
         btn.addEventListener('click', () => {
           const action = btn.getAttribute('data-action');
           const idx = parseInt(btn.getAttribute('data-index'), 10);
@@ -934,6 +1343,25 @@
         });
       });
 
+      // Add New Period Button
+      const addBtn = root.getElementById('btn-add-period');
+      if (addBtn) {
+        addBtn.addEventListener('click', () => {
+          if (this._editingTransitions.length >= 6) return;
+          const existingMins = this._editingTransitions.map(t => timeToMin(t.time));
+          let candidate = 12 * 60;
+          if (existingMins.includes(candidate)) candidate = 16 * 60;
+          if (existingMins.includes(candidate)) candidate = 8 * 60;
+          if (existingMins.includes(candidate)) candidate = 20 * 60;
+
+          const newTimeStr = minToTime(candidate);
+          this._editingTransitions.push({ time: newTimeStr, temperature: 21.0 });
+          this._editingTransitions.sort((a, b) => timeToMin(a.time) - timeToMin(b.time));
+          this._render();
+        });
+      }
+
+      // Copy to Weekdays
       const copyWdBtn = root.getElementById('btn-copy-weekdays');
       if (copyWdBtn) {
         copyWdBtn.addEventListener('click', () => {
@@ -944,6 +1372,7 @@
         });
       }
 
+      // Copy to All
       const copyAllBtn = root.getElementById('btn-copy-all');
       if (copyAllBtn) {
         copyAllBtn.addEventListener('click', () => {
@@ -957,6 +1386,260 @@
     getCardSize() {
       return 6;
     }
+
+    static getConfigElement() {
+      return document.createElement('sonoff-trv-schedule-card-editor');
+    }
+
+    static getStubConfig(hass, entities) {
+      const trv = entities.find(e => e.startsWith('climate.trv_')) ||
+                  entities.find(e => e.startsWith('climate.')) || '';
+      return {
+        type: 'custom:sonoff-trv-schedule-card',
+        title: 'Розклад опалення',
+        climate_entity: trv,
+        entity_prefix: trv ? trv.replace(/^climate\./, 'text.') : '',
+        default_view: 'tabs',
+        language: '',
+      };
+    }
+  }
+
+  class SonoffTrvScheduleCardEditor extends HTMLElement {
+    constructor() {
+      super();
+      this.attachShadow({ mode: 'open' });
+      this._config = {};
+      this._hass = null;
+    }
+
+    setConfig(config) {
+      this._config = { ...config };
+      this._render();
+    }
+
+    set hass(hass) {
+      this._hass = hass;
+      this._render();
+    }
+
+    _valueChanged(key, value) {
+      if (!this._config) return;
+      const newConfig = { ...this._config, [key]: value };
+
+      if (key === 'climate_entity' && value) {
+        if (!this._config.entity_prefix || this._config.entity_prefix.startsWith('text.trv_')) {
+          newConfig.entity_prefix = value.replace(/^climate\./, 'text.');
+        }
+      }
+
+      this._config = newConfig;
+      this.dispatchEvent(new CustomEvent('config-changed', {
+        detail: { config: this._config },
+        bubbles: true,
+        composed: true,
+      }));
+    }
+
+    _render() {
+      const root = this.shadowRoot;
+      if (!root) return;
+
+      const langCode = (this._hass && (this._hass.locale?.language || this._hass.language)) || 'uk';
+      const isUk = langCode.startsWith('uk') || langCode.startsWith('ua');
+
+      const title = this._config.title || '';
+      const climate = this._config.climate_entity || this._config.entity || '';
+      const prefix = this._config.entity_prefix || (climate ? climate.replace(/^climate\./, 'text.') : '');
+      const defaultView = this._config.default_view || 'tabs';
+      const cardLang = this._config.language || '';
+
+      const climateEntities = this._hass
+        ? Object.keys(this._hass.states).filter(eid => eid.startsWith('climate.'))
+        : [];
+
+      root.innerHTML = `
+        <style>
+          :host {
+            display: block;
+            padding: 8px 0;
+            font-family: var(--ha-card-font-family, system-ui, -apple-system, sans-serif);
+            color: var(--primary-text-color, #e2e8f0);
+            box-sizing: border-box;
+          }
+          *, *::before, *::after {
+            box-sizing: inherit;
+          }
+          .editor-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+          }
+          .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+          }
+          .label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--primary-text-color, #f8fafc);
+          }
+          .hint {
+            font-size: 11px;
+            color: var(--secondary-text-color, #94a3b8);
+            line-height: 1.4;
+          }
+          .input, .select {
+            background: var(--input-fill-color, rgba(255, 255, 255, 0.06));
+            border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.15));
+            border-radius: 8px;
+            color: var(--primary-text-color, #fff);
+            padding: 10px 12px;
+            font-size: 13px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+          }
+          .input:focus, .select:focus {
+            border-color: var(--primary-color, #0284c7);
+          }
+          .select {
+            cursor: pointer;
+          }
+          .select option {
+            background: #1e293b;
+            color: #fff;
+          }
+          .entity-quick-pills {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 4px;
+          }
+          .pill-btn {
+            background: rgba(2, 132, 199, 0.15);
+            border: 1px solid rgba(2, 132, 199, 0.3);
+            color: #38bdf8;
+            font-size: 11px;
+            font-family: monospace;
+            padding: 3px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+          }
+          .pill-btn:hover {
+            background: rgba(2, 132, 199, 0.25);
+          }
+        </style>
+
+        <div class="editor-container">
+          <div class="form-group">
+            <label class="label">${isUk ? 'Назва картки' : 'Card Title'}</label>
+            <input type="text" class="input" id="field-title" value="${title}" placeholder="${isUk ? 'Розклад опалення' : 'Heating Schedule'}" />
+          </div>
+
+          <div class="form-group">
+            <label class="label">
+              ${isUk ? 'Клімат-сутність (TRV Valve)' : 'Climate Entity (TRV Valve)'}
+            </label>
+            <input type="text" list="climate-list" class="input" id="field-climate" value="${climate}" placeholder="climate.trv_kabinet" />
+            <datalist id="climate-list">
+              ${climateEntities.map(id => `<option value="${id}">${this._hass?.states[id]?.attributes?.friendly_name || id}</option>`).join('')}
+            </datalist>
+            <span class="hint">
+              ${isUk ? 'Оберіть термостат. Картка автоматично підтягне поточну температуру та сформує префікс для розкладу.' : 'Select radiator TRV. The card will link current temperature and auto-derive schedule prefix.'}
+            </span>
+            ${climateEntities.length > 0 ? `
+              <div class="entity-quick-pills">
+                <span class="hint" style="align-self: center;">${isUk ? 'Швидкий вибір:' : 'Quick pick:'}</span>
+                ${climateEntities.slice(0, 5).map(id => `
+                  <button type="button" class="pill-btn" data-entity="${id}">${id.replace('climate.', '')}</button>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+
+          <div class="form-group">
+            <label class="label">
+              ${isUk ? 'Базовий префікс сутностей розкладу (Entity Prefix)' : 'Schedule Entity Prefix'}
+            </label>
+            <input type="text" class="input" id="field-prefix" value="${prefix}" placeholder="text.trv_kabinet" style="font-family: monospace;" />
+            <span class="hint">
+              ${isUk ? 'Картка звертається до: ' : 'Card connects to: '}
+              <code style="color: #38bdf8;">${prefix ? prefix : 'text.trv_kabinet'}_weekly_schedule_[monday..sunday]</code>
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label class="label">
+              ${isUk ? 'Початковий режим перегляду' : 'Default View Mode'}
+            </label>
+            <select class="select" id="field-view">
+              <option value="tabs" ${defaultView === 'tabs' ? 'selected' : ''}>${isUk ? 'День (Вкладки днів)' : 'Day (Single Day Tabs)'}</option>
+              <option value="list" ${defaultView === 'list' ? 'selected' : ''}>${isUk ? 'Тиждень (Огляд усіх 7 днів)' : 'Week (All 7 Days List)'}</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="label">
+              ${isUk ? 'Мова картки' : 'Card Language'}
+            </label>
+            <select class="select" id="field-lang">
+              <option value="" ${cardLang === '' ? 'selected' : ''}>${isUk ? 'Автоматично (з налаштувань Home Assistant)' : 'Auto (from Home Assistant settings)'}</option>
+              <option value="uk" ${cardLang === 'uk' ? 'selected' : ''}>Українська (Ukrainian)</option>
+              <option value="en" ${cardLang === 'en' ? 'selected' : ''}>English</option>
+            </select>
+          </div>
+        </div>
+      `;
+
+      this._attachListeners();
+    }
+
+    _attachListeners() {
+      const root = this.shadowRoot;
+      if (!root) return;
+
+      const titleInput = root.getElementById('field-title');
+      if (titleInput) {
+        titleInput.addEventListener('change', e => this._valueChanged('title', e.target.value));
+      }
+
+      const climateInput = root.getElementById('field-climate');
+      if (climateInput) {
+        climateInput.addEventListener('change', e => this._valueChanged('climate_entity', e.target.value));
+      }
+
+      const prefixInput = root.getElementById('field-prefix');
+      if (prefixInput) {
+        prefixInput.addEventListener('change', e => this._valueChanged('entity_prefix', e.target.value));
+      }
+
+      const viewSelect = root.getElementById('field-view');
+      if (viewSelect) {
+        viewSelect.addEventListener('change', e => this._valueChanged('default_view', e.target.value));
+      }
+
+      const langSelect = root.getElementById('field-lang');
+      if (langSelect) {
+        langSelect.addEventListener('change', e => this._valueChanged('language', e.target.value));
+      }
+
+      root.querySelectorAll('.pill-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const ent = btn.getAttribute('data-entity');
+          if (ent) {
+            this._valueChanged('climate_entity', ent);
+            const climateInp = root.getElementById('field-climate');
+            if (climateInp) climateInp.value = ent;
+          }
+        });
+      });
+    }
+  }
+
+  if (!customElements.get('sonoff-trv-schedule-card-editor')) {
+    customElements.define('sonoff-trv-schedule-card-editor', SonoffTrvScheduleCardEditor);
   }
 
   if (!customElements.get('sonoff-trv-schedule-card')) {

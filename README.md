@@ -45,7 +45,8 @@ Editing these strings manually in text inputs is tedious, prone to typing errors
 3. In Home Assistant, go to **Settings → Dashboards → Resources** and click **Add Resource**:
    - **URL**: `/local/sonoff-trv-schedule-card.js`
    - **Resource type**: `JavaScript Module`
-4. Add the card to any dashboard using the manual YAML editor.
+4. Add the card to any dashboard using the **Visual Card Editor** (GUI) or the manual YAML editor.
+   - When adding the card, Home Assistant will automatically open the visual editor with entity pickers and live preview!
 
 ---
 

@@ -57,25 +57,23 @@ export const CardExporter: React.FC<CardExporterProps> = ({
   }, [cardTitle, entityPrefix, climateEntity, customEntities, hasCustomEntities, lang]);
 
   const loadJsCode = async () => {
-    if (!jsCode) {
-      try {
-        const res = await fetch('/sonoff-trv-schedule-card.js');
-        const text = await res.text();
-        setJsCode(text);
-      } catch (err) {
-        console.error('Failed to load JS file', err);
-      }
+    try {
+      const res = await fetch(`/sonoff-trv-schedule-card.js?v=${Date.now()}`, { cache: 'no-cache' });
+      const text = await res.text();
+      setJsCode(text);
+    } catch (err) {
+      console.error('Failed to load JS file', err);
     }
   };
 
   const loadHacsFiles = async () => {
     try {
       if (!readmeContent) {
-        const r = await fetch('/README.md');
+        const r = await fetch(`/README.md?v=${Date.now()}`, { cache: 'no-cache' });
         setReadmeContent(await r.text());
       }
       if (!hacsContent) {
-        const h = await fetch('/hacs.json');
+        const h = await fetch(`/hacs.json?v=${Date.now()}`, { cache: 'no-cache' });
         setHacsContent(await h.text());
       }
     } catch (err) {
@@ -117,7 +115,7 @@ export const CardExporter: React.FC<CardExporterProps> = ({
 
   const triggerDownload = (url: string, filename: string) => {
     const link = document.createElement('a');
-    link.href = url;
+    link.href = `${url}?v=${Date.now()}`;
     link.download = filename;
     document.body.appendChild(link);
     link.click();

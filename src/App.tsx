@@ -218,7 +218,7 @@ export default function App() {
 
   const handleDownloadCard = () => {
     const link = document.createElement('a');
-    link.href = '/sonoff-trv-schedule-card.js';
+    link.href = `/sonoff-trv-schedule-card.js?v=${Date.now()}`;
     link.download = 'sonoff-trv-schedule-card.js';
     document.body.appendChild(link);
     link.click();
