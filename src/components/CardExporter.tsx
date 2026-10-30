@@ -56,13 +56,15 @@ export const CardExporter: React.FC<CardExporterProps> = ({
     return yaml;
   }, [cardTitle, entityPrefix, climateEntity, customEntities, hasCustomEntities, lang]);
 
-  const loadJsCode = async () => {
+  const loadJsCode = async (): Promise<string> => {
     try {
       const res = await fetch(`/sonoff-trv-schedule-card.js?v=${Date.now()}`, { cache: 'no-cache' });
       const text = await res.text();
       setJsCode(text);
+      return text;
     } catch (err) {
       console.error('Failed to load JS file', err);
+      return '';
     }
   };
 
@@ -88,9 +90,10 @@ export const CardExporter: React.FC<CardExporterProps> = ({
   };
 
   const handleCopyJs = async () => {
-    await loadJsCode();
-    if (jsCode) {
-      navigator.clipboard.writeText(jsCode);
+    const freshCode = await loadJsCode();
+    const target = freshCode || jsCode;
+    if (target) {
+      navigator.clipboard.writeText(target);
       setCopiedJs(true);
       setTimeout(() => setCopiedJs(false), 2500);
     }
@@ -180,15 +183,20 @@ export const CardExporter: React.FC<CardExporterProps> = ({
           </button>
         </div>
 
-        {/* Primary Download Button */}
-        <button
-          type="button"
-          onClick={() => triggerDownload('/sonoff-trv-schedule-card.js', 'sonoff-trv-schedule-card.js')}
-          className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all shadow-sm"
-        >
-          <Download className="w-4 h-4" />
-          <span>{t.btnDownloadJs}</span>
-        </button>
+        {/* Primary Download Button & Version */}
+        <div className="flex items-center gap-2">
+          <span className="px-2.5 py-1 text-xs font-mono font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-lg">
+            v1.1.0
+          </span>
+          <button
+            type="button"
+            onClick={() => triggerDownload('/sonoff-trv-schedule-card.js', 'sonoff-trv-schedule-card.js')}
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all shadow-sm"
+          >
+            <Download className="w-4 h-4" />
+            <span>{t.btnDownloadJs}</span>
+          </button>
+        </div>
       </div>
 
       {/* Content */}
@@ -336,7 +344,7 @@ export const CardExporter: React.FC<CardExporterProps> = ({
                   <code className="text-amber-300 font-mono">LICENSE</code>.
                 </li>
                 <li>
-                  Зробіть GitHub Release (наприклад, тег <code className="text-emerald-300 font-mono">v1.0.0</code>).
+                  Зробіть GitHub Release (наприклад, тег <code className="text-emerald-300 font-mono">v1.1.0</code>).
                 </li>
                 <li>
                   У Home Assistant відкрийте <strong>HACS</strong> → три крапки вгорі справа →{' '}

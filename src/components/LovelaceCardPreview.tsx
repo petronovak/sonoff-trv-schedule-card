@@ -21,6 +21,11 @@ import {
   Battery,
   Edit3,
   CheckCircle2,
+  AlertTriangle,
+  Calendar,
+  CheckSquare,
+  Square,
+  X,
 } from 'lucide-react';
 
 interface LovelaceCardPreviewProps {
@@ -62,6 +67,20 @@ export const LovelaceCardPreview: React.FC<LovelaceCardPreviewProps> = ({
   const [viewMode, setViewMode] = useState<'tabs' | 'list'>('tabs');
   const [copiedNotification, setCopiedNotification] = useState<string>('');
 
+  // Confirmation Modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    targetDays: DayOfWeek[];
+    notif: string;
+  } | null>(null);
+
+  // Custom Days Selection Modal state
+  const [customDaysModal, setCustomDaysModal] = useState<{
+    isOpen: boolean;
+    selectedKeys: Set<DayOfWeek>;
+  } | null>(null);
+
   const selectedDay = DAYS_INFO[selectedDayIndex];
   const dayDisplayName = lang === 'en' ? selectedDay.nameEn : selectedDay.nameUk;
   const activeDayTransitions = schedules[selectedDay.key] || [{ time: '00:00', temperature: 20 }];
@@ -73,30 +92,85 @@ export const LovelaceCardPreview: React.FC<LovelaceCardPreviewProps> = ({
   const isSelectedToday = selectedDayIndex === todayIndex;
   const currentInterval = isSelectedToday ? getActiveInterval(intervals, currentMinutes) : null;
 
-  const handleQuickCopy = (e: React.MouseEvent, target: 'weekdays' | 'weekend' | 'all') => {
+  const handlePromptQuickCopy = (e: React.MouseEvent, target: 'weekdays' | 'weekend' | 'all') => {
     e.stopPropagation();
     let targets: DayOfWeek[] = [];
     let notif = '';
+    let title = '';
     if (target === 'weekdays') {
-      targets = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+      targets = (['monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as DayOfWeek[]).filter(k => k !== selectedDay.key);
       notif = t.copiedNotificationWeekdays;
+      title = t.confirmCopyWeekdays.replace('{day}', dayDisplayName);
     } else if (target === 'weekend') {
-      targets = ['saturday', 'sunday'];
+      targets = (['saturday', 'sunday'] as DayOfWeek[]).filter(k => k !== selectedDay.key);
       notif = t.copiedNotificationWeekend;
+      title = `${t.btnCopyWeekend}: ${dayDisplayName}`;
     } else {
-      targets = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+      targets = (['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as DayOfWeek[]).filter(k => k !== selectedDay.key);
       notif = t.copiedNotificationAll;
+      title = t.confirmCopyAll.replace('{day}', dayDisplayName);
     }
 
-    onCopyDay(selectedDay.key, targets);
-    setCopiedNotification(notif);
+    setConfirmModal({
+      isOpen: true,
+      title,
+      targetDays: targets,
+      notif,
+    });
+  };
+
+  const handleOpenCustomDays = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const otherDays = DAYS_INFO.filter(d => d.key !== selectedDay.key).map(d => d.key);
+    setCustomDaysModal({
+      isOpen: true,
+      selectedKeys: new Set(otherDays),
+    });
+  };
+
+  const handleConfirmCopy = () => {
+    if (!confirmModal) return;
+    onCopyDay(selectedDay.key, confirmModal.targetDays);
+    setCopiedNotification(confirmModal.notif);
+    setConfirmModal(null);
     setTimeout(() => setCopiedNotification(''), 3000);
+  };
+
+  const handleApplyCustomDays = () => {
+    if (!customDaysModal) return;
+    const targets = Array.from(customDaysModal.selectedKeys);
+    onCopyDay(selectedDay.key, targets);
+    setCopiedNotification(`${t.copiedNotificationCustom} (${targets.length})`);
+    setCustomDaysModal(null);
+    setTimeout(() => setCopiedNotification(''), 3000);
+  };
+
+  const toggleCustomDay = (key: DayOfWeek) => {
+    if (!customDaysModal) return;
+    const next = new Set(customDaysModal.selectedKeys);
+    if (next.has(key)) {
+      next.delete(key);
+    } else {
+      next.add(key);
+    }
+    setCustomDaysModal({ ...customDaysModal, selectedKeys: next });
+  };
+
+  const selectAllCustomDays = () => {
+    if (!customDaysModal) return;
+    const all = DAYS_INFO.filter(d => d.key !== selectedDay.key).map(d => d.key);
+    setCustomDaysModal({ ...customDaysModal, selectedKeys: new Set(all) });
+  };
+
+  const deselectAllCustomDays = () => {
+    if (!customDaysModal) return;
+    setCustomDaysModal({ ...customDaysModal, selectedKeys: new Set() });
   };
 
   return (
     <div className="w-full max-w-xl mx-auto">
       {/* Visual Home Assistant Card Shell */}
-      <div className="bg-slate-900/95 border border-slate-800 rounded-2xl shadow-xl overflow-hidden transition-all duration-200">
+      <div className="bg-slate-900/95 border border-slate-800 rounded-2xl shadow-xl overflow-hidden transition-all duration-200 relative">
         {/* Card Header */}
         <div className="p-5 pb-4 border-b border-slate-800/80 bg-slate-900/60 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -315,10 +389,10 @@ export const LovelaceCardPreview: React.FC<LovelaceCardPreviewProps> = ({
                 <span>{t.btnEditSchedule} ({dayDisplayName})</span>
               </button>
 
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   type="button"
-                  onClick={e => handleQuickCopy(e, 'weekdays')}
+                  onClick={e => handlePromptQuickCopy(e, 'weekdays')}
                   className="px-2.5 py-1.5 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700/80 rounded-lg transition-colors"
                   title={t.btnCopyWeekdays}
                 >
@@ -326,11 +400,19 @@ export const LovelaceCardPreview: React.FC<LovelaceCardPreviewProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={e => handleQuickCopy(e, 'all')}
+                  onClick={e => handlePromptQuickCopy(e, 'all')}
                   className="px-2.5 py-1.5 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700/80 rounded-lg transition-colors"
                   title={t.btnCopyAll}
                 >
                   {t.btnCopyAll}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenCustomDays}
+                  className="px-2.5 py-1.5 text-xs text-sky-400 hover:text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 rounded-lg transition-colors"
+                  title={t.btnCopyCustom}
+                >
+                  {t.btnCopyCustom}
                 </button>
               </div>
             </div>
@@ -385,6 +467,143 @@ export const LovelaceCardPreview: React.FC<LovelaceCardPreviewProps> = ({
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* Confirmation Modal */}
+        {confirmModal && confirmModal.isOpen && (
+          <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-sm w-full shadow-2xl flex flex-col gap-3">
+              <div className="flex items-center gap-2.5 text-amber-400">
+                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <h4 className="text-sm font-bold text-white tracking-tight">{t.confirmCopyTitle}</h4>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                {confirmModal.title}
+              </p>
+              <div className="flex items-center gap-1.5 flex-wrap py-1">
+                {confirmModal.targetDays.map(k => {
+                  const day = DAYS_INFO.find(d => d.key === k);
+                  return (
+                    <span key={k} className="text-[11px] px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">
+                      {lang === 'en' ? day?.nameEn : day?.nameUk}
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setConfirmModal(null)}
+                  className="px-3 py-1.5 text-xs text-slate-400 hover:text-white rounded-lg transition-colors"
+                >
+                  {t.cancelAction}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmCopy}
+                  className="px-4 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-sm transition-colors"
+                >
+                  {t.confirmAction}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Custom Days Selection Modal */}
+        {customDaysModal && customDaysModal.isOpen && (
+          <div className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 max-w-sm w-full shadow-2xl flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5 text-sky-400">
+                  <Calendar className="w-5 h-5 shrink-0" />
+                  <h4 className="text-sm font-bold text-white tracking-tight">{t.selectDaysTitle}</h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCustomDaysModal(null)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-xs text-slate-300">
+                {t.selectDaysSubtitle.replace('{day}', dayDisplayName)}
+              </p>
+              <div className="flex items-center gap-3 text-xs">
+                <button
+                  type="button"
+                  onClick={selectAllCustomDays}
+                  className="text-sky-400 hover:text-sky-300 underline font-medium"
+                >
+                  {t.selectAll}
+                </button>
+                <span className="text-slate-600">·</span>
+                <button
+                  type="button"
+                  onClick={deselectAllCustomDays}
+                  className="text-sky-400 hover:text-sky-300 underline font-medium"
+                >
+                  {t.deselectAll}
+                </button>
+              </div>
+              <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
+                {DAYS_INFO.map(d => {
+                  const isCurrent = d.key === selectedDay.key;
+                  const isChecked = customDaysModal.selectedKeys.has(d.key);
+                  const dTransitions = schedules[d.key] || [];
+                  const label = lang === 'en' ? d.nameEn : d.nameUk;
+                  return (
+                    <div
+                      key={d.key}
+                      onClick={() => !isCurrent && toggleCustomDay(d.key)}
+                      className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                        isCurrent
+                          ? 'opacity-40 cursor-not-allowed bg-slate-950/50 border-slate-800'
+                          : isChecked
+                          ? 'bg-sky-950/40 border-sky-500/50 text-white'
+                          : 'bg-slate-800/40 border-slate-800 text-slate-300 hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        {isChecked ? (
+                          <CheckSquare className="w-4 h-4 text-sky-400 shrink-0" />
+                        ) : (
+                          <Square className="w-4 h-4 text-slate-500 shrink-0" />
+                        )}
+                        <span className="font-medium">{label}</span>
+                        {isCurrent && (
+                          <span className="text-[10px] text-slate-500">
+                            ({lang === 'en' ? 'current' : 'поточний'})
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-mono text-[11px] text-slate-500">
+                        {dTransitions.length} / 6
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setCustomDaysModal(null)}
+                  className="px-3 py-1.5 text-xs text-slate-400 hover:text-white rounded-lg transition-colors"
+                >
+                  {t.cancelAction}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyCustomDays}
+                  disabled={customDaysModal.selectedKeys.size === 0}
+                  className="px-4 py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-lg shadow-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {t.applyToSelected} ({customDaysModal.selectedKeys.size})
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

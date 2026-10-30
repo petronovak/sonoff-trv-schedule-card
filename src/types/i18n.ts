@@ -33,6 +33,18 @@ export interface Translations {
   btnCopyWeekdays: string;
   btnCopyWeekend: string;
   btnCopyAll: string;
+  btnCopyCustom: string;
+  confirmCopyTitle: string;
+  confirmCopyWeekdays: string;
+  confirmCopyAll: string;
+  selectDaysTitle: string;
+  selectDaysSubtitle: string;
+  selectAll: string;
+  deselectAll: string;
+  applyToSelected: string;
+  confirmAction: string;
+  cancelAction: string;
+  copiedNotificationCustom: string;
   viewDay: string;
   viewWeek: string;
   clickToEditWeek: string;
@@ -137,6 +149,18 @@ export const I18N: Record<Language, Translations> = {
     btnCopyWeekdays: 'На будні',
     btnCopyWeekend: 'На вихідні',
     btnCopyAll: 'На тиждень',
+    btnCopyCustom: 'Вибрати дні...',
+    confirmCopyTitle: 'Підтвердження копіювання',
+    confirmCopyWeekdays: 'Застосувати розклад дня {day} до всіх буднів (Пн-Пт, 5 дн.)? Поточні налаштування цих днів буде замінено.',
+    confirmCopyAll: 'Застосувати розклад дня {day} до всього тижня (7 дн.)? Поточні налаштування цих днів буде замінено.',
+    selectDaysTitle: 'Вибір днів для копіювання',
+    selectDaysSubtitle: 'Оберіть дні, до яких скопіювати розклад з дня {day}:',
+    selectAll: 'Вибрати всі',
+    deselectAll: 'Зняти вибір',
+    applyToSelected: 'Застосувати до обраних',
+    confirmAction: 'Підтвердити',
+    cancelAction: 'Скасувати',
+    copiedNotificationCustom: 'Розклад скопійовано на обрані дні',
     viewDay: 'День',
     viewWeek: 'Тиждень',
     clickToEditWeek: 'Натисніть на будь-який день для детального редагування:',
@@ -239,6 +263,18 @@ export const I18N: Record<Language, Translations> = {
     btnCopyWeekdays: 'To weekdays',
     btnCopyWeekend: 'To weekend',
     btnCopyAll: 'To whole week',
+    btnCopyCustom: 'Select days...',
+    confirmCopyTitle: 'Confirm Schedule Copy',
+    confirmCopyWeekdays: 'Apply schedule of {day} to all weekdays (Mon-Fri, 5 days)? Existing settings will be replaced.',
+    confirmCopyAll: 'Apply schedule of {day} to the entire week (7 days)? Existing settings will be replaced.',
+    selectDaysTitle: 'Select Days to Copy',
+    selectDaysSubtitle: 'Choose days to receive the schedule from {day}:',
+    selectAll: 'Select all',
+    deselectAll: 'Deselect all',
+    applyToSelected: 'Apply to selected',
+    confirmAction: 'Confirm',
+    cancelAction: 'Cancel',
+    copiedNotificationCustom: 'Schedule copied to selected days',
     viewDay: 'Day',
     viewWeek: 'Week',
     clickToEditWeek: 'Click any day for detailed schedule editing:',

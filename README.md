@@ -2,10 +2,13 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/default)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2023.1%2B-blue.svg)](https://www.home-assistant.io/)
+[![Release](https://img.shields.io/badge/Release-v1.1.0-blue.svg)](https://github.com/petronovak/sonoff-trv-schedule-card/releases)
 [![Zigbee2MQTT](https://img.shields.io/badge/Zigbee2MQTT-Compatible-emerald.svg)](https://www.zigbee2mqtt.io/devices/TRVZB.html)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 A modern, intuitive, and error-free Lovelace card to view and edit weekly heating schedules for **Sonoff TRVZB** thermostatic radiator valves integrated via **Zigbee2MQTT**.
+
+**Latest Version:** `v1.1.0` (Added custom days selector, confirmation dialogs, and native visual editor).
 
 *Також доступно українською мовою нижче.*
 
@@ -21,7 +24,7 @@ Editing these strings manually in text inputs is tedious, prone to typing errors
 - **24-hour visual heat gradient timeline** for each day of the week.
 - **Error-free period editor**: Automatically enforces the mandatory `00:00` start, sorts chronologically, respects the 6-period limit, and steps in `0.5°C` (range `4.0°C` – `35.0°C`).
 - **Quick temperature presets**: Frost Protection (7°C), Eco (17°C), Sleep (19°C), Comfort (21.5°C), Warm (23°C), Boost (25°C).
-- **Bulk copy**: Copy schedule from any day to **All Weekdays (Mon-Fri)**, **Weekend (Sat-Sun)**, or **Whole Week** in one click.
+- **Bulk copy & Custom selection**: Copy schedule from any day to **All Weekdays (Mon-Fri)**, **Whole Week**, or **Custom Selected Days** with confirmation prompts to prevent accidental overwrites.
 - **Bilingual (English & Ukrainian)**: Automatically detects Home Assistant interface language or can be set manually.
 - **Optional Climate integration**: Shows current room temperature, setpoint, and battery level directly in the card header.
 
@@ -105,7 +108,8 @@ entities:
 - 24-годинні кольорові таймлайни температури.
 - Захист від помилок: обов'язковий старт о 00:00, до 6 точок, крок 0.5°C (від 4 до 35°C).
 - Швидкі пресети (Еко, Ніч, Комфорт, Тепло, Boost).
-- Копіювання розкладу в 1 клік на всі будні або весь тиждень.
+- Копіювання розкладу на всі будні, весь тиждень або довільні обрані дні з підтвердженням.
+- Візуальний конфігуратор для додавання картки через інтерфейс Lovelace (GUI).
 - Підтримка відображення поточної температури з прив'язаного `climate.*`.
 
 ### Ліцензія

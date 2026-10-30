@@ -1,9 +1,16 @@
 /**
  * Sonoff TRVZB Weekly Heating Schedule Card for Home Assistant (Lovelace)
+ * Version: 1.1.0 (Release: 2026-10-30)
  * Compatible with Zigbee2MQTT text entities (format: HH:mm/temperature ...)
  * Supports Ukrainian (uk) and English (en) with automatic language detection.
  * Author: Petro Novak / AI Studio Build
  * License: Apache-2.0
+ * 
+ * Changelog v1.1.0:
+ * - Added custom days picker modal ("Вибрати дні...") with individual checkboxes
+ * - Added confirmation dialogs before batch copying to Weekdays / Whole week
+ * - Added native Home Assistant Visual Card Editor (SonoffTrvScheduleCardEditor)
+ * - Added 24-hour interactive visual timeline with Day / Week view switchers
  */
 
 (function () {
@@ -31,6 +38,15 @@
       weekdays: 'Будні (Пн-Пт)',
       weekend: 'Вихідні (Сб-Нд)',
       allWeek: 'Весь тиждень',
+      copyCustom: 'Вибрати дні...',
+      confirmCopyTitle: 'Підтвердження копіювання',
+      confirmCopyText: 'Застосувати розклад дня {sourceDay} до обраних днів: {targetList}? Поточні налаштування цих днів буде замінено.',
+      selectDaysTitle: 'Вибір днів для копіювання',
+      selectDaysSubtitle: 'Оберіть дні, до яких скопіювати розклад з дня {sourceDay}:',
+      selectAll: 'Вибрати всі',
+      deselectAll: 'Зняти вибір',
+      applyToSelected: 'Застосувати до обраних ({count})',
+      confirmBtn: 'Підтвердити',
       savedFor: 'Збережено для',
       copiedSuccess: 'Розклад успішно скопійовано на',
       daysCount: 'дн.',
@@ -74,6 +90,15 @@
       weekdays: 'Weekdays (Mon-Fri)',
       weekend: 'Weekend (Sat-Sun)',
       allWeek: 'Whole week',
+      copyCustom: 'Select days...',
+      confirmCopyTitle: 'Confirm Schedule Copy',
+      confirmCopyText: 'Apply schedule of {sourceDay} to selected days: {targetList}? Existing settings for these days will be replaced.',
+      selectDaysTitle: 'Select Days to Copy',
+      selectDaysSubtitle: 'Choose days to receive the schedule from {sourceDay}:',
+      selectAll: 'Select all',
+      deselectAll: 'Deselect all',
+      applyToSelected: 'Apply to selected ({count})',
+      confirmBtn: 'Confirm',
       savedFor: 'Saved for',
       copiedSuccess: 'Schedule copied successfully to',
       daysCount: 'days',
@@ -204,6 +229,7 @@
       this._editingTransitions = [];
       this._statusMsg = '';
       this._statusTimeout = null;
+      this._modal = null;
     }
 
     _getTodayIndex() {
@@ -518,6 +544,82 @@
         `;
       }).join('');
 
+      // Modal markup (confirmation or custom days picker)
+      let modalMarkup = '';
+      if (this._modal) {
+        if (this._modal.type === 'confirm') {
+          const targetNames = this._modal.targetDays.map(d => d.name).join(', ');
+          modalMarkup = `
+            <div class="modal-overlay" id="modal-overlay">
+              <div class="modal-box">
+                <div class="modal-header">
+                  <span class="modal-icon">⚠️</span>
+                  <h3 class="modal-title">${lang.confirmCopyTitle}</h3>
+                </div>
+                <div class="modal-body">
+                  <p class="modal-desc">
+                    ${lang.confirmCopyText
+                      .replace('{sourceDay}', `<strong>${this._modal.sourceDayName}</strong>`)
+                      .replace('{targetList}', `<strong>${targetNames}</strong>`)}
+                  </p>
+                  <div class="modal-affected-tag">
+                    ${this._modal.targetDays.length} ${lang.daysCount}
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button class="btn-secondary" id="modal-btn-cancel">${lang.cancel}</button>
+                  <button class="btn-primary" id="modal-btn-confirm" style="background: #16a34a;">${lang.confirmBtn}</button>
+                </div>
+              </div>
+            </div>
+          `;
+        } else if (this._modal.type === 'custom') {
+          const selectedCount = this._modal.selectedKeys.length;
+          modalMarkup = `
+            <div class="modal-overlay" id="modal-overlay">
+              <div class="modal-box">
+                <div class="modal-header">
+                  <span class="modal-icon">📋</span>
+                  <h3 class="modal-title">${lang.selectDaysTitle}</h3>
+                </div>
+                <div class="modal-body">
+                  <p class="modal-desc">
+                    ${lang.selectDaysSubtitle.replace('{sourceDay}', `<strong>${this._modal.sourceDayName}</strong>`)}
+                  </p>
+                  <div class="modal-quick-bar">
+                    <button type="button" class="btn-link" id="btn-select-all-days">${lang.selectAll}</button>
+                    <span style="opacity: 0.4;">·</span>
+                    <button type="button" class="btn-link" id="btn-deselect-all-days">${lang.deselectAll}</button>
+                  </div>
+                  <div class="modal-days-grid">
+                    ${lang.days.map(d => {
+                      const isSelected = this._modal.selectedKeys.includes(d.key);
+                      const isSource = d.key === this._modal.sourceDayKey;
+                      const dData = this._getDayData(d.key);
+                      return `
+                        <div class="custom-day-row ${isSelected ? 'selected' : ''} ${isSource ? 'source-day' : ''}" data-day-key="${d.key}">
+                          <div class="custom-day-left">
+                            <input type="checkbox" class="cb-day" data-day-key="${d.key}" ${isSelected ? 'checked' : ''} ${isSource ? 'disabled' : ''} />
+                            <span>${d.name} ${isSource ? `<span style="font-size: 10px; color: #94a3b8;">(${lang.today === 'Сьогодні' ? 'поточний' : 'current'})</span>` : ''}</span>
+                          </div>
+                          <span class="custom-day-count">${dData.transitions.length} / 6</span>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button class="btn-secondary" id="modal-btn-cancel">${lang.cancel}</button>
+                  <button class="btn-primary" id="modal-btn-apply-custom" style="background: #0284c7;" ${selectedCount === 0 ? 'disabled' : ''}>
+                    ${lang.applyToSelected.replace('{count}', selectedCount)}
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      }
+
       root.innerHTML = `
         <style>
           :host {
@@ -535,6 +637,8 @@
             border: 1px solid var(--ha-card-border-color, rgba(255, 255, 255, 0.08));
             padding: 16px;
             box-shadow: var(--ha-card-box-shadow, 0 4px 20px rgba(0, 0, 0, 0.15));
+            position: relative;
+            overflow: hidden;
           }
           .header {
             display: flex;
@@ -1090,6 +1194,149 @@
             padding: 4px 8px;
             border-radius: 4px;
           }
+
+          /* Copy Confirmation & Custom Days Modals */
+          .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            padding: 14px;
+            border-radius: var(--ha-card-border-radius, 16px);
+            box-sizing: border-box;
+          }
+          .modal-box {
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 12px;
+            padding: 16px;
+            max-width: 380px;
+            width: 100%;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            box-sizing: border-box;
+          }
+          .modal-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+          .modal-icon {
+            font-size: 18px;
+          }
+          .modal-title {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 700;
+            color: #ffffff;
+          }
+          .modal-desc {
+            margin: 0;
+            font-size: 13px;
+            color: #cbd5e1;
+            line-height: 1.45;
+          }
+          .modal-desc strong {
+            color: #38bdf8;
+          }
+          .modal-quick-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+            margin-bottom: 2px;
+          }
+          .btn-link {
+            background: none;
+            border: none;
+            color: #38bdf8;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 0;
+            text-decoration: underline;
+          }
+          .btn-link:hover {
+            color: #7dd3fc;
+          }
+          .modal-days-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 4px;
+            margin-bottom: 4px;
+            padding-right: 2px;
+          }
+          .custom-day-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 10px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+          }
+          .custom-day-row:hover:not(.source-day) {
+            background: rgba(255, 255, 255, 0.08);
+          }
+          .custom-day-row.selected {
+            background: rgba(2, 132, 199, 0.18);
+            border-color: rgba(2, 132, 199, 0.6);
+          }
+          .custom-day-row.source-day {
+            opacity: 0.55;
+            cursor: not-allowed;
+          }
+          .custom-day-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #f1f5f9;
+          }
+          .cb-day {
+            cursor: pointer;
+            width: 15px;
+            height: 15px;
+            accent-color: #0284c7;
+          }
+          .custom-day-count {
+            font-size: 11px;
+            color: #94a3b8;
+            font-family: monospace;
+          }
+          .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 6px;
+          }
+          .modal-affected-tag {
+            display: inline-block;
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            align-self: flex-start;
+            margin-top: 4px;
+          }
         </style>
 
         <div class="card-container">
@@ -1177,12 +1424,15 @@
                 <button class="btn-primary" id="btn-edit-mode">
                   ${lang.edit}
                 </button>
-                <div style="display: flex; gap: 6px;">
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                   <button class="btn-secondary" id="btn-copy-weekdays" title="${lang.weekdays}">
                     ${lang.weekdays}
                   </button>
                   <button class="btn-secondary" id="btn-copy-all" title="${lang.allWeek}">
                     ${lang.allWeek}
+                  </button>
+                  <button class="btn-secondary" id="btn-copy-custom" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.35);" title="${lang.copyCustom}">
+                    ${lang.copyCustom}
                   </button>
                 </div>
               ` : `
@@ -1218,6 +1468,9 @@
           ${this._statusMsg ? `
             <div class="status-banner">${this._statusMsg}</div>
           ` : ''}
+
+          <!-- Modal Layer -->
+          ${modalMarkup}
         </div>
       `;
 
@@ -1361,26 +1614,136 @@
         });
       }
 
-      // Copy to Weekdays
+      // Copy to Weekdays -> Confirmation modal
       const copyWdBtn = root.getElementById('btn-copy-weekdays');
       if (copyWdBtn) {
         copyWdBtn.addEventListener('click', () => {
           const day = lang.days[this._selectedDayIndex];
           const data = this._getDayData(day.key);
-          const weekdays = lang.days.filter(d => !d.isWeekend);
-          this._copyToDays(weekdays, data.transitions);
+          const weekdays = lang.days.filter(d => !d.isWeekend && d.key !== day.key);
+          this._modal = {
+            type: 'confirm',
+            targetDays: weekdays,
+            sourceDayName: day.name,
+            sourceTransitions: data.transitions,
+          };
+          this._render();
         });
       }
 
-      // Copy to All
+      // Copy to All -> Confirmation modal
       const copyAllBtn = root.getElementById('btn-copy-all');
       if (copyAllBtn) {
         copyAllBtn.addEventListener('click', () => {
           const day = lang.days[this._selectedDayIndex];
           const data = this._getDayData(day.key);
-          this._copyToDays(lang.days, data.transitions);
+          const allOtherDays = lang.days.filter(d => d.key !== day.key);
+          this._modal = {
+            type: 'confirm',
+            targetDays: allOtherDays,
+            sourceDayName: day.name,
+            sourceTransitions: data.transitions,
+          };
+          this._render();
         });
       }
+
+      // Copy to Custom Days -> Selection modal with checkboxes
+      const copyCustomBtn = root.getElementById('btn-copy-custom');
+      if (copyCustomBtn) {
+        copyCustomBtn.addEventListener('click', () => {
+          const day = lang.days[this._selectedDayIndex];
+          const data = this._getDayData(day.key);
+          const initialKeys = lang.days.filter(d => d.key !== day.key).map(d => d.key);
+          this._modal = {
+            type: 'custom',
+            selectedKeys: initialKeys,
+            sourceDayKey: day.key,
+            sourceDayName: day.name,
+            sourceTransitions: data.transitions,
+          };
+          this._render();
+        });
+      }
+
+      // Modal Events
+      const modalOverlay = root.getElementById('modal-overlay');
+      if (modalOverlay) {
+        modalOverlay.addEventListener('click', e => {
+          if (e.target === modalOverlay) {
+            this._modal = null;
+            this._render();
+          }
+        });
+      }
+
+      const modalCancel = root.getElementById('modal-btn-cancel');
+      if (modalCancel) {
+        modalCancel.addEventListener('click', () => {
+          this._modal = null;
+          this._render();
+        });
+      }
+
+      const modalConfirm = root.getElementById('modal-btn-confirm');
+      if (modalConfirm) {
+        modalConfirm.addEventListener('click', () => {
+          if (this._modal && this._modal.type === 'confirm') {
+            const targets = this._modal.targetDays;
+            const sourceTransitions = this._modal.sourceTransitions;
+            this._modal = null;
+            this._copyToDays(targets, sourceTransitions);
+          }
+        });
+      }
+
+      const modalApplyCustom = root.getElementById('modal-btn-apply-custom');
+      if (modalApplyCustom) {
+        modalApplyCustom.addEventListener('click', () => {
+          if (this._modal && this._modal.type === 'custom') {
+            const selectedKeys = this._modal.selectedKeys;
+            const targets = lang.days.filter(d => selectedKeys.includes(d.key));
+            const sourceTransitions = this._modal.sourceTransitions;
+            this._modal = null;
+            this._copyToDays(targets, sourceTransitions);
+          }
+        });
+      }
+
+      const btnSelectAll = root.getElementById('btn-select-all-days');
+      if (btnSelectAll) {
+        btnSelectAll.addEventListener('click', () => {
+          if (this._modal && this._modal.type === 'custom') {
+            this._modal.selectedKeys = lang.days.filter(d => d.key !== this._modal.sourceDayKey).map(d => d.key);
+            this._render();
+          }
+        });
+      }
+
+      const btnDeselectAll = root.getElementById('btn-deselect-all-days');
+      if (btnDeselectAll) {
+        btnDeselectAll.addEventListener('click', () => {
+          if (this._modal && this._modal.type === 'custom') {
+            this._modal.selectedKeys = [];
+            this._render();
+          }
+        });
+      }
+
+      root.querySelectorAll('.custom-day-row').forEach(row => {
+        row.addEventListener('click', () => {
+          if (row.classList.contains('source-day')) return;
+          const dayKey = row.getAttribute('data-day-key');
+          if (!dayKey || !this._modal || this._modal.type !== 'custom') return;
+          const idx = this._modal.selectedKeys.indexOf(dayKey);
+          if (idx >= 0) {
+            this._modal.selectedKeys.splice(idx, 1);
+          } else {
+            this._modal.selectedKeys.push(dayKey);
+          }
+          this._render();
+        });
+      });
     }
 
     getCardSize() {
@@ -1645,6 +2008,12 @@
   if (!customElements.get('sonoff-trv-schedule-card')) {
     customElements.define('sonoff-trv-schedule-card', SonoffTrvScheduleCard);
   }
+
+  console.info(
+    '%c SONOFF-TRV-SCHEDULE-CARD %c v1.1.0 ',
+    'background: #0284c7; color: white; font-weight: bold; padding: 2px 6px; border-radius: 3px 0 0 3px;',
+    'background: #334155; color: #38bdf8; font-weight: bold; padding: 2px 6px; border-radius: 0 3px 3px 0;'
+  );
 
   window.customCards = window.customCards || [];
   const exists = window.customCards.some(c => c.type === 'sonoff-trv-schedule-card');
