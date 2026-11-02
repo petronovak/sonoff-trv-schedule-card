@@ -44,4 +44,4 @@ if (fs.existsSync(distDir)) {
 
 const stats = fs.statSync(sourceCard);
 const sizeKb = (stats.size / 1024).toFixed(2);
-console.log(`🎉 [build:card] Completed successfully! Size: ${sizeKb} KB (Version 1.1.0)`);
+console.log(`🎉 [build:card] Completed successfully! Size: ${sizeKb} KB (Version 1.2.0)`);

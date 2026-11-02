@@ -11,6 +11,7 @@ interface CardExporterProps {
   cardTitle: string;
   entityPrefix: string;
   climateEntity: string;
+  batteryEntity?: string;
   customEntities?: Record<string, string>;
   hasCustomEntities?: boolean;
   lang: Language;
@@ -20,6 +21,7 @@ export const CardExporter: React.FC<CardExporterProps> = ({
   cardTitle,
   entityPrefix,
   climateEntity,
+  batteryEntity = '',
   customEntities,
   hasCustomEntities = false,
   lang,
@@ -44,6 +46,11 @@ export const CardExporter: React.FC<CardExporterProps> = ({
     if (climateEntity) {
       yaml += `climate_entity: ${climateEntity}\n`;
     }
+    if (batteryEntity) {
+      yaml += `battery_entity: ${batteryEntity}\n`;
+    } else {
+      yaml += `# battery_entity: sensor.trv_kabinet_battery # ${lang === 'en' ? 'optional, auto-detected by default' : 'опційно, автоматично шукається sensor.<name>_battery'}\n`;
+    }
     if (lang === 'en') {
       yaml += `language: en\n`;
     }
@@ -54,7 +61,7 @@ export const CardExporter: React.FC<CardExporterProps> = ({
       }
     }
     return yaml;
-  }, [cardTitle, entityPrefix, climateEntity, customEntities, hasCustomEntities, lang]);
+  }, [cardTitle, entityPrefix, climateEntity, batteryEntity, customEntities, hasCustomEntities, lang]);
 
   const loadJsCode = async (): Promise<string> => {
     try {
@@ -186,7 +193,7 @@ export const CardExporter: React.FC<CardExporterProps> = ({
         {/* Primary Download Button & Version */}
         <div className="flex items-center gap-2">
           <span className="px-2.5 py-1 text-xs font-mono font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30 rounded-lg">
-            v1.1.0
+            v1.2.0
           </span>
           <button
             type="button"

@@ -2,13 +2,13 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/default)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2023.1%2B-blue.svg)](https://www.home-assistant.io/)
-[![Release](https://img.shields.io/badge/Release-v1.1.0-blue.svg)](https://github.com/petronovak/sonoff-trv-schedule-card/releases)
+[![Release](https://img.shields.io/badge/Release-v1.2.0-blue.svg)](https://github.com/petronovak/sonoff-trv-schedule-card/releases)
 [![Zigbee2MQTT](https://img.shields.io/badge/Zigbee2MQTT-Compatible-emerald.svg)](https://www.zigbee2mqtt.io/devices/TRVZB.html)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 A modern, intuitive, and error-free Lovelace card to view and edit weekly heating schedules for **Sonoff TRVZB** thermostatic radiator valves integrated via **Zigbee2MQTT**.
 
-**Latest Version:** `v1.1.0` (Added custom days selector, confirmation dialogs, and native visual editor).
+**Latest Version:** `v1.2.0` (Automatic battery sensor discovery `sensor.<name>_battery`, optional `battery_entity`, and compact single-line toolbar buttons).
 
 *Також доступно українською мовою нижче.*
 
@@ -24,7 +24,9 @@ Editing these strings manually in text inputs is tedious, prone to typing errors
 - **24-hour visual heat gradient timeline** for each day of the week.
 - **Error-free period editor**: Automatically enforces the mandatory `00:00` start, sorts chronologically, respects the 6-period limit, and steps in `0.5°C` (range `4.0°C` – `35.0°C`).
 - **Quick temperature presets**: Frost Protection (7°C), Eco (17°C), Sleep (19°C), Comfort (21.5°C), Warm (23°C), Boost (25°C).
-- **Bulk copy & Custom selection**: Copy schedule from any day to **All Weekdays (Mon-Fri)**, **Whole Week**, or **Custom Selected Days** with confirmation prompts to prevent accidental overwrites.
+- **Bulk copy & Custom selection**: Copy schedule from any day to **Weekdays (Mon-Fri)**, **Whole Week**, or **Custom Selected Days** with confirmation prompts.
+- **Compact single-line toolbar**: Streamlined action buttons ("Edit", "Weekdays", "Week", "Custom") that fit neatly in one row on mobile screens.
+- **Automatic Battery Level Discovery**: Auto-detects `sensor.<name>_battery` from climate entity or prefix, or supports custom `battery_entity` with dynamic color-coded icons.
 - **Bilingual (English & Ukrainian)**: Automatically detects Home Assistant interface language or can be set manually.
 - **Optional Climate integration**: Shows current room temperature, setpoint, and battery level directly in the card header.
 
@@ -58,7 +60,8 @@ Editing these strings manually in text inputs is tedious, prone to typing errors
 | Option | Type | Required | Default | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `type` | string | **Yes** | `custom:sonoff-trv-schedule-card` | Card type identifier |
-| `entity` / `climate_entity` | string | Recommended | `''` | Linked climate entity (e.g. `climate.trv_kabinet`). **The card automatically derives the prefix** `text.trv_kabinet` for all 7 days! |
+| `entity` / `climate_entity` | string | Recommended | `''` | Linked climate entity (e.g. `climate.trv_kabinet`). **The card automatically derives the prefix** `text.trv_kabinet` and battery `sensor.trv_kabinet_battery`! |
+| `battery_entity` | string | No | Auto from climate | Standalone battery percentage sensor (e.g. `sensor.trv_kabinet_battery`). Auto-detected if not specified. |
 | `title` | string | No | `'Sonoff TRVZB Heating Schedule'` | Card header title |
 | `entity_prefix` | string | No | Auto from climate | Common prefix for the 7 text entities (e.g. `text.trv_kabinet`). Overrides auto-derivation. |
 | `language` | string | No | `'auto'` | Force language: `'en'` or `'uk'`. If omitted, detects automatically from Home Assistant. |
@@ -70,6 +73,7 @@ Editing these strings manually in text inputs is tedious, prone to typing errors
 type: custom:sonoff-trv-schedule-card
 entity: climate.trv_kabinet
 # Automatically binds to: text.trv_kabinet_weekly_schedule_monday ... sunday
+# Automatically discovers: sensor.trv_kabinet_battery
 ```
 
 #### Full Example:

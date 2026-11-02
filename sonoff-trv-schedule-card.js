@@ -1,16 +1,16 @@
 /**
  * Sonoff TRVZB Weekly Heating Schedule Card for Home Assistant (Lovelace)
- * Version: 1.1.0 (Release: 2026-10-30)
+ * Version: 1.2.0 (Release: 2026-11-02)
  * Compatible with Zigbee2MQTT text entities (format: HH:mm/temperature ...)
  * Supports Ukrainian (uk) and English (en) with automatic language detection.
  * Author: Petro Novak / AI Studio Build
  * License: Apache-2.0
  * 
- * Changelog v1.1.0:
- * - Added custom days picker modal ("Вибрати дні...") with individual checkboxes
- * - Added confirmation dialogs before batch copying to Weekdays / Whole week
- * - Added native Home Assistant Visual Card Editor (SonoffTrvScheduleCardEditor)
- * - Added 24-hour interactive visual timeline with Day / Week view switchers
+ * Changelog v1.2.0:
+ * - Added automatic discovery and display of battery level sensor (sensor.<name>_battery)
+ * - Added optional custom battery_entity configuration field and Visual Editor input
+ * - Shortened toolbar action labels to fit in a single neat row: Редагувати / Будні / Тиждень / Певні
+ * - Made bottom toolbar responsive with equal-width buttons
  */
 
 (function () {
@@ -27,18 +27,19 @@
       ],
       current: 'Поточна',
       target: 'Ціль',
+      battery: 'Батарея',
       scale24h: '24-годинна шкала:',
       periods: 'періодів',
       hoursUnit: 'год',
-      edit: '✎ Редагувати розклад',
+      edit: '✎ Редагувати',
       save: '✓ Зберегти зміни в HA',
       cancel: '✕ Скасувати',
       add: '+ Додати період',
       newTransition: '+ Новий перехід:',
-      weekdays: 'Будні (Пн-Пт)',
-      weekend: 'Вихідні (Сб-Нд)',
-      allWeek: 'Весь тиждень',
-      copyCustom: 'Вибрати дні...',
+      weekdays: 'Будні',
+      weekend: 'Вихідні',
+      allWeek: 'Тиждень',
+      copyCustom: 'Певні',
       confirmCopyTitle: 'Підтвердження копіювання',
       confirmCopyText: 'Застосувати розклад дня {sourceDay} до обраних днів: {targetList}? Поточні налаштування цих днів буде замінено.',
       selectDaysTitle: 'Вибір днів для копіювання',
@@ -79,18 +80,19 @@
       ],
       current: 'Current',
       target: 'Target',
+      battery: 'Battery',
       scale24h: '24-hour scale:',
       periods: 'periods',
       hoursUnit: 'h',
-      edit: '✎ Edit schedule',
+      edit: '✎ Edit',
       save: '✓ Save changes to HA',
       cancel: '✕ Cancel',
       add: '+ Add period',
       newTransition: '+ New transition:',
-      weekdays: 'Weekdays (Mon-Fri)',
-      weekend: 'Weekend (Sat-Sun)',
-      allWeek: 'Whole week',
-      copyCustom: 'Select days...',
+      weekdays: 'Weekdays',
+      weekend: 'Weekend',
+      allWeek: 'Week',
+      copyCustom: 'Custom',
       confirmCopyTitle: 'Confirm Schedule Copy',
       confirmCopyText: 'Apply schedule of {sourceDay} to selected days: {targetList}? Existing settings for these days will be replaced.',
       selectDaysTitle: 'Select Days to Copy',
@@ -252,6 +254,7 @@
         title: config.title || '',
         entity_prefix: config.entity_prefix || '',
         climate_entity: climate,
+        battery_entity: config.battery_entity || '',
         entities: config.entities || {},
         language: config.language || '',
         default_view: config.default_view || 'tabs',
@@ -273,6 +276,86 @@
       }
     }
 
+    _resolveBatteryEntityId() {
+      if (!this._hass) return null;
+      // 1. Explicitly configured entity
+      if (this._config.battery_entity && this._hass.states[this._config.battery_entity]) {
+        return this._config.battery_entity;
+      }
+      // 2. Derive from climate entity: e.g. climate.trv_kabinet -> sensor.trv_kabinet_battery
+      const candidateClimate = (this._config.climate_entity || this._config.entity || '').trim();
+      if (candidateClimate) {
+        const cleanName = candidateClimate.replace(/^climate\./, '');
+        const sensorId = `sensor.${cleanName}_battery`;
+        if (this._hass.states[sensorId]) {
+          return sensorId;
+        }
+      }
+      // 3. Derive from entity prefix: e.g. text.trv_kabinet -> sensor.trv_kabinet_battery
+      let prefix = (this._config.entity_prefix || '').trim();
+      if (prefix) {
+        let cleanPrefix = prefix.replace(/^(text|climate|sensor)\./, '');
+        cleanPrefix = cleanPrefix.replace(/_weekly_schedule_.*$/, '');
+        const sensorId = `sensor.${cleanPrefix}_battery`;
+        if (this._hass.states[sensorId]) {
+          return sensorId;
+        }
+      }
+      return null;
+    }
+
+    _getBatteryInfo(climateStateObj) {
+      if (!this._hass) return null;
+
+      // 1. Check resolved standalone sensor (auto-detected or configured)
+      const sensorId = this._resolveBatteryEntityId();
+      if (sensorId && this._hass.states[sensorId]) {
+        const st = this._hass.states[sensorId];
+        if (st.state !== undefined && st.state !== 'unavailable' && st.state !== 'unknown') {
+          const num = parseFloat(st.state);
+          if (!isNaN(num)) {
+            const pct = Math.min(100, Math.max(0, Math.round(num)));
+            return {
+              percent: pct,
+              icon: this._getBatteryIcon(pct),
+              source: sensorId,
+            };
+          }
+        }
+      }
+
+      // 2. Fallback to climate entity attributes (battery or battery_level)
+      if (climateStateObj && climateStateObj.attributes) {
+        const val = climateStateObj.attributes.battery ?? climateStateObj.attributes.battery_level;
+        if (val !== undefined && val !== null && val !== 'unavailable' && val !== 'unknown') {
+          const num = parseFloat(val);
+          if (!isNaN(num)) {
+            const pct = Math.min(100, Math.max(0, Math.round(num)));
+            return {
+              percent: pct,
+              icon: this._getBatteryIcon(pct),
+              source: 'climate.attributes',
+            };
+          }
+        }
+      }
+
+      return null;
+    }
+
+    _getBatteryIcon(pct) {
+      if (pct >= 90) return 'mdi:battery';
+      if (pct >= 80) return 'mdi:battery-80';
+      if (pct >= 70) return 'mdi:battery-70';
+      if (pct >= 60) return 'mdi:battery-60';
+      if (pct >= 50) return 'mdi:battery-50';
+      if (pct >= 40) return 'mdi:battery-40';
+      if (pct >= 30) return 'mdi:battery-30';
+      if (pct >= 20) return 'mdi:battery-20';
+      if (pct >= 10) return 'mdi:battery-10';
+      return 'mdi:battery-alert';
+    }
+
     _hasEntityChanged(oldHass, newHass) {
       const lang = this._getLangStrings();
       const entities = this._resolveEntityMap();
@@ -285,6 +368,10 @@
       if (this._config.climate_entity) {
         const cid = this._config.climate_entity;
         if (oldHass.states[cid]?.state !== newHass.states[cid]?.state) return true;
+      }
+      const batteryId = this._resolveBatteryEntityId();
+      if (batteryId && oldHass.states[batteryId]?.state !== newHass.states[batteryId]?.state) {
+        return true;
       }
       return false;
     }
@@ -412,24 +499,43 @@
         }
       }
 
-      // Climate badge in header
+      // Climate and Battery badges in header
+      const clState = (this._config.climate_entity && this._hass) ? this._hass.states[this._config.climate_entity] : null;
+      const batteryInfo = this._getBatteryInfo(clState);
+
       let climateInfo = '';
-      if (this._config.climate_entity && this._hass) {
-        const clState = this._hass.states[this._config.climate_entity];
-        if (clState) {
-          const curTemp = clState.attributes?.current_temperature ?? '--';
-          const targetTemp = clState.attributes?.temperature ?? '--';
-          const hvacAction = clState.attributes?.hvac_action || clState.state || 'auto';
-          climateInfo = `
-            <div class="climate-badge">
-              <span class="cl-item">${lang.current}: <strong>${curTemp}°C</strong></span>
-              <span class="cl-sep">·</span>
-              <span class="cl-item">${lang.target}: <strong>${targetTemp}°C</strong></span>
-              <span class="cl-sep">·</span>
-              <span class="cl-item cl-mode">${hvacAction}</span>
-            </div>
-          `;
-        }
+      if (clState || batteryInfo) {
+        const curTemp = clState?.attributes?.current_temperature ?? null;
+        const targetTemp = clState?.attributes?.temperature ?? null;
+        const hvacAction = clState?.attributes?.hvac_action || clState?.state || null;
+
+        const batteryColor = batteryInfo
+          ? (batteryInfo.percent <= 15 ? '#f87171' : batteryInfo.percent <= 30 ? '#f59e0b' : '#34d399')
+          : '#34d399';
+
+        const batterySvg = batteryInfo ? `
+          <svg class="battery-svg" viewBox="0 0 20 12" width="16" height="11" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: ${batteryColor}; flex-shrink: 0;">
+            <rect x="0.75" y="0.75" width="14.5" height="10.5" rx="2.25" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M17.5 4v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <rect x="2.5" y="2.5" width="${Math.max(1, Math.min(10, Math.round((batteryInfo.percent / 100) * 10)))}" height="7" rx="1" fill="currentColor"/>
+          </svg>
+        ` : '';
+
+        climateInfo = `
+          <div class="climate-badge">
+            ${curTemp !== null ? `<span class="cl-item">${lang.current}: <strong>${curTemp}°C</strong></span>` : ''}
+            ${curTemp !== null && targetTemp !== null ? `<span class="cl-sep">·</span>` : ''}
+            ${targetTemp !== null ? `<span class="cl-item">${lang.target}: <strong>${targetTemp}°C</strong></span>` : ''}
+            ${hvacAction ? `<span class="cl-sep">·</span><span class="cl-item cl-mode">${hvacAction}</span>` : ''}
+            ${((curTemp !== null || targetTemp !== null || hvacAction) && batteryInfo) ? `<span class="cl-sep">·</span>` : ''}
+            ${batteryInfo ? `
+              <span class="cl-item cl-battery" style="display: inline-flex; align-items: center; gap: 4px;" title="${lang.battery}: ${batteryInfo.percent}% (${batteryInfo.source})">
+                ${batterySvg}
+                <strong style="color: ${batteryColor}; font-family: monospace;">${batteryInfo.percent}%</strong>
+              </span>
+            ` : ''}
+          </div>
+        `;
       }
 
       // 24h timeline segments for Day view
@@ -1138,23 +1244,43 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 8px;
+            flex-wrap: nowrap;
+            gap: 5px;
             padding-top: 8px;
             border-top: 1px solid rgba(255, 255, 255, 0.06);
+            width: 100%;
+          }
+          .btn-toolbar {
+            flex: 1 1 0px;
+            min-width: 0;
+            padding: 7px 4px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            box-sizing: border-box;
+            cursor: pointer;
+            transition: all 0.15s ease;
           }
           .btn-primary {
             background: var(--primary-color, #0284c7);
             color: #ffffff;
-            border: none;
-            padding: 7px 16px;
+            border: 1px solid transparent;
+            padding: 7px 12px;
             border-radius: 8px;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
             cursor: pointer;
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 6px;
+            justify-content: center;
+            gap: 4px;
             transition: opacity 0.15s ease;
           }
           .btn-primary:hover {
@@ -1164,16 +1290,27 @@
             background: rgba(255, 255, 255, 0.08);
             color: var(--primary-text-color, #f8fafc);
             border: 1px solid rgba(255, 255, 255, 0.12);
-            padding: 6px 12px;
+            padding: 7px 8px;
             border-radius: 8px;
-            font-size: 12px;
+            font-size: 11px;
+            font-weight: 500;
             cursor: pointer;
-            display: flex;
+            display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 4px;
+            transition: all 0.15s ease;
           }
           .btn-secondary:hover {
             background: rgba(255, 255, 255, 0.14);
+          }
+          .btn-custom {
+            color: #38bdf8 !important;
+            border-color: rgba(56, 189, 248, 0.35) !important;
+            background: rgba(56, 189, 248, 0.08) !important;
+          }
+          .btn-custom:hover {
+            background: rgba(56, 189, 248, 0.18) !important;
           }
           .status-banner {
             margin-top: 10px;
@@ -1421,20 +1558,18 @@
             <!-- Bottom Toolbar -->
             <div class="toolbar">
               ${!this._editing ? `
-                <button class="btn-primary" id="btn-edit-mode">
+                <button class="btn-primary btn-toolbar" id="btn-edit-mode" title="${lang.edit}">
                   ${lang.edit}
                 </button>
-                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                  <button class="btn-secondary" id="btn-copy-weekdays" title="${lang.weekdays}">
-                    ${lang.weekdays}
-                  </button>
-                  <button class="btn-secondary" id="btn-copy-all" title="${lang.allWeek}">
-                    ${lang.allWeek}
-                  </button>
-                  <button class="btn-secondary" id="btn-copy-custom" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.35);" title="${lang.copyCustom}">
-                    ${lang.copyCustom}
-                  </button>
-                </div>
+                <button class="btn-secondary btn-toolbar" id="btn-copy-weekdays" title="${lang.weekdays} (Пн-Пт)">
+                  ${lang.weekdays}
+                </button>
+                <button class="btn-secondary btn-toolbar" id="btn-copy-all" title="${lang.allWeek} (Пн-Нд)">
+                  ${lang.allWeek}
+                </button>
+                <button class="btn-secondary btn-toolbar btn-custom" id="btn-copy-custom" title="${lang.copyCustom}">
+                  ${lang.copyCustom}
+                </button>
               ` : `
                 <div style="display: flex; gap: 6px; align-items: center;">
                   <button class="btn-primary" id="btn-save" style="background: #16a34a;">
@@ -1814,11 +1949,16 @@
       const title = this._config.title || '';
       const climate = this._config.climate_entity || this._config.entity || '';
       const prefix = this._config.entity_prefix || (climate ? climate.replace(/^climate\./, 'text.') : '');
+      const battery = this._config.battery_entity || '';
       const defaultView = this._config.default_view || 'tabs';
       const cardLang = this._config.language || '';
 
       const climateEntities = this._hass
         ? Object.keys(this._hass.states).filter(eid => eid.startsWith('climate.'))
+        : [];
+
+      const batteryEntities = this._hass
+        ? Object.keys(this._hass.states).filter(eid => eid.startsWith('sensor.') && eid.includes('battery'))
         : [];
 
       root.innerHTML = `
@@ -1924,6 +2064,19 @@
 
           <div class="form-group">
             <label class="label">
+              ${isUk ? 'Сутність сенсора батареї (опційно)' : 'Battery Sensor Entity (optional)'}
+            </label>
+            <input type="text" list="battery-list" class="input" id="field-battery" value="${battery}" placeholder="sensor.trv_kabinet_battery" />
+            <datalist id="battery-list">
+              ${batteryEntities.map(id => `<option value="${id}">${this._hass?.states[id]?.attributes?.friendly_name || id}</option>`).join('')}
+            </datalist>
+            <span class="hint">
+              ${isUk ? 'Автоматично підтягується як sensor.<назва>_battery якщо поле порожнє.' : 'Auto-detected as sensor.<name>_battery when left blank.'}
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label class="label">
               ${isUk ? 'Базовий префікс сутностей розкладу (Entity Prefix)' : 'Schedule Entity Prefix'}
             </label>
             <input type="text" class="input" id="field-prefix" value="${prefix}" placeholder="text.trv_kabinet" style="font-family: monospace;" />
@@ -1973,6 +2126,11 @@
         climateInput.addEventListener('change', e => this._valueChanged('climate_entity', e.target.value));
       }
 
+      const batteryInput = root.getElementById('field-battery');
+      if (batteryInput) {
+        batteryInput.addEventListener('change', e => this._valueChanged('battery_entity', e.target.value.trim()));
+      }
+
       const prefixInput = root.getElementById('field-prefix');
       if (prefixInput) {
         prefixInput.addEventListener('change', e => this._valueChanged('entity_prefix', e.target.value));
@@ -2010,7 +2168,7 @@
   }
 
   console.info(
-    '%c SONOFF-TRV-SCHEDULE-CARD %c v1.1.0 ',
+    '%c SONOFF-TRV-SCHEDULE-CARD %c v1.2.0 ',
     'background: #0284c7; color: white; font-weight: bold; padding: 2px 6px; border-radius: 3px 0 0 3px;',
     'background: #334155; color: #38bdf8; font-weight: bold; padding: 2px 6px; border-radius: 0 3px 3px 0;'
   );

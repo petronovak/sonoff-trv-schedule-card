@@ -378,43 +378,44 @@ export const LovelaceCardPreview: React.FC<LovelaceCardPreviewProps> = ({
               })}
             </div>
 
-            {/* Actions for current day */}
-            <div className="pt-2 flex items-center justify-between flex-wrap gap-2">
+            {/* Actions for current day (compact single row) */}
+            <div className="pt-2 grid grid-cols-4 gap-1.5 w-full">
               <button
                 type="button"
                 onClick={() => onEditDay(selectedDay.key)}
-                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-xl transition-colors shadow-sm"
+                className="inline-flex items-center justify-center gap-1.5 px-2 py-2 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 rounded-xl transition-colors shadow-sm truncate text-center"
+                title={`${t.btnEditSchedule} (${dayDisplayName})`}
               >
-                <Edit3 className="w-4 h-4" />
-                <span>{t.btnEditSchedule} ({dayDisplayName})</span>
+                <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{t.btnEditSchedule}</span>
               </button>
 
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <button
-                  type="button"
-                  onClick={e => handlePromptQuickCopy(e, 'weekdays')}
-                  className="px-2.5 py-1.5 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700/80 rounded-lg transition-colors"
-                  title={t.btnCopyWeekdays}
-                >
-                  {t.btnCopyWeekdays}
-                </button>
-                <button
-                  type="button"
-                  onClick={e => handlePromptQuickCopy(e, 'all')}
-                  className="px-2.5 py-1.5 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700/80 rounded-lg transition-colors"
-                  title={t.btnCopyAll}
-                >
-                  {t.btnCopyAll}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleOpenCustomDays}
-                  className="px-2.5 py-1.5 text-xs text-sky-400 hover:text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 rounded-lg transition-colors"
-                  title={t.btnCopyCustom}
-                >
-                  {t.btnCopyCustom}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={e => handlePromptQuickCopy(e, 'weekdays')}
+                className="px-2 py-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700/80 rounded-xl transition-colors truncate text-center"
+                title={lang === 'en' ? 'Weekdays (Mon-Fri)' : 'Будні (Пн-Пт)'}
+              >
+                <span className="truncate">{t.btnCopyWeekdays}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={e => handlePromptQuickCopy(e, 'all')}
+                className="px-2 py-2 text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700/80 rounded-xl transition-colors truncate text-center"
+                title={lang === 'en' ? 'Whole week (Mon-Sun)' : 'Весь тиждень (Пн-Нд)'}
+              >
+                <span className="truncate">{t.btnCopyAll}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenCustomDays}
+                className="px-2 py-2 text-xs font-medium text-sky-400 hover:text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 rounded-xl transition-colors truncate text-center"
+                title={lang === 'en' ? 'Custom selection of days' : 'Вибір довільних днів'}
+              >
+                <span className="truncate">{t.btnCopyCustom}</span>
+              </button>
             </div>
           </div>
         )}
